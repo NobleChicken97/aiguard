@@ -4,8 +4,8 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done (v1.6.2)
 
-- [ ] Approve/deny POSTs without a valid token are rejected (4xx) and the denial is logged
-- [ ] The normal queue flow (open page → decide) works unchanged in the browser
-- [ ] Existing webapp tests updated to fetch the token; new tests cover the reject path
+- [x] Approve/deny POSTs without a valid token are rejected (403) and the denial is logged
+- [x] The normal queue flow (open page → decide) works unchanged in the browser
+- [x] Existing webapp tests updated to fetch the token; new tests cover the reject path

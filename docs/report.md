@@ -93,7 +93,8 @@ The project test suite covers all safety, resilience, and integration paths:
 | Row-count fail-closed gate (v1.6.1) | 4 tests | 100% |
 | Supervisor routing (v1.6.1) | 4 tests | 100% |
 | Memory distillation & PII masking (v1.6.1) | 4 tests | 100% |
-| **Total** | **147 tests** | **100% (139 without PG)** |
+| Fact deletion, approval CSRF, builder audit (v1.6.2) | 6 tests | 100% |
+| **Total** | **153 tests** | **100% (145 without PG)** |
 
 ### Adversarial guardrail effectiveness
 
@@ -122,6 +123,16 @@ All 22 destructive SQL attempts across 17 adversarial prompts are blocked before
 
 ### Version history
 
+- **v1.6.2** (Sep 2026) — Security & auditability tickets (from `.scratch/netsentry-vnext/issues/`):
+  - `DELETE /api/users/{user_id}/memory/{fact_id}` + inspector delete
+    control (ticket 05); delete is user-scoped and 404s cross-user ids
+  - CSRF double-submit cookie on the approval endpoints — 403 on
+    missing/mismatched token (ticket 04); `python-multipart` dependency
+  - Dedicated `app_builder_runs` audit table + dashboard "Builder Runs"
+    card; agent metrics untouched (ticket 08)
+  - Accessibility pass: focus outlines, labeled controls, aria-live
+    regions, confirm dialogs on approve/deny
+  - Test suite: 147 → 153 (145 pass without PG, 8 PG-gated)
 - **v1.6.1** (Sep 2026) — Correctness & safety fixes from the full-project audit:
   - `ContentBlock.to_dict` now emits the Anthropic wire format
     (`id`/`name`/`input`); the old internal key names broke the real-API

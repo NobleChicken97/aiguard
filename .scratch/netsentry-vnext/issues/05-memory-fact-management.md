@@ -4,8 +4,8 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done (v1.6.2)
 
-- [ ] A fact can be deleted from the inspector and disappears from future sessions' context
-- [ ] Deleting a nonexistent/already-deleted fact returns 404, not a silent success
-- [ ] Webapp tests cover the endpoint's happy path and 404 path
+- [x] A fact can be deleted from the inspector and disappears from future sessions' context
+- [x] Deleting a nonexistent/already-deleted fact returns 404, not a silent success
+- [x] Webapp tests cover the endpoint's happy path and 404 path

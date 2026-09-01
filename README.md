@@ -454,7 +454,7 @@ def check(self, sql):
 | Design | `docs/design.md` | Technical design and trade-offs |
 | Build Plan | `docs/plan.md` | Phased build plan and MVP cut line |
 | Deployment | `docs/DEPLOYMENT.md` | Docker, Render, Railway, AWS deployment |
-| Test Results | `docs/report.md` | 147-test suite, 100% adversarial block rate |
+| Test Results | `docs/report.md` | 153-test suite, 100% adversarial block rate |
 | API | `webapp.py` | FastAPI endpoints and templates |
 | Config | `config.py` | Application configuration |
 | Tests | `tests/` | Adversarial test suites (17 prompts) |

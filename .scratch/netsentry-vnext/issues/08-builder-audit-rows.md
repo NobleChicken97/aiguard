@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done (v1.6.2)
 
-- [ ] Every builder run persists an audit row including the generated SQL and verdict
-- [ ] Agent metrics (tool-usage counts, guardrail verdict breakdown) remain unaffected by builder runs
-- [ ] The decision (synthetic-session vs dedicated table) is recorded in the design doc
-- [ ] Tests assert audit rows exist and that agent stats ignore them
+- [x] Every builder run persists an audit row including the generated SQL and verdict
+- [x] Agent metrics (tool-usage counts, guardrail verdict breakdown) remain unaffected by builder runs
+- [x] The decision (synthetic-session vs dedicated table) is recorded in the design doc — dedicated `app_builder_runs` table, rationale in the module docstring
+- [x] Tests assert audit rows exist and that agent stats ignore them

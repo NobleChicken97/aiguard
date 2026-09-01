@@ -1,8 +1,8 @@
 # Project Progress Tracking
 
-**Overall Status**: ✅ Phases 1-9 COMPLETE · ✅ v1.6.0 Hardening · ✅ v1.6.1 Correctness & Safety Fixes
+**Overall Status**: ✅ Phases 1-9 COMPLETE · ✅ v1.6.0 Hardening · ✅ v1.6.1 Correctness & Safety Fixes · ✅ v1.6.2 Security & Auditability Tickets
 
-> Last verified against code: September 1, 2026 — **139/139 tests passing without PostgreSQL** (8 PG-gated skip; 147 collected in total).
+> Last verified against code: September 1, 2026 — **145/145 tests passing without PostgreSQL** (8 PG-gated skip; 153 collected in total).
 
 ## Phase 1 — Orchestrator + Tools
 **Status:** ✅ Completed
@@ -136,6 +136,32 @@
   supervisor refactor).
 - **Test suite grew from 87 → 131 tests** (123 pass without PG,
   8 PG-gated, 1 deprecation warning).
+
+## v1.6.2 — Security & Auditability Tickets (Sep 1, 2026)
+**Status:** ✅ Completed
+
+Implemented from the tracer-bullet ticket set in `.scratch/netsentry-vnext/issues/`:
+
+1. **Ticket 05 — Memory fact management**: `DELETE /api/users/{user_id}/memory/{fact_id}`
+   backed by a user-scoped `LongTermMemory.delete_fact` (a fact id belonging to
+   another user 404s instead of deleting). The memory inspector lists a
+   confirmed Delete control per fact so wrong/stale facts stop reaching future
+   prompts.
+2. **Ticket 04 — CSRF defense on approval endpoints**: double-submit cookie
+   (`HttpOnly` + `SameSite=Lax` cookie, hidden form field, `secrets.compare_digest`);
+   missing/mismatching tokens get a 403 and the request stays pending.
+   `python-multipart` added as a dependency for `Form` parsing. Full auth
+   remains a documented non-goal; approval ids stay unguessable uuid4s.
+3. **Ticket 08 — Builder-run audit rows**: every visual-builder SELECT records
+   SQL, verdict, row count, and timing in a dedicated `app_builder_runs` table;
+   the dashboard gains a "Builder Runs" card and `/api/stats` a `builder_runs`
+   counter, with agent metrics (`app_tool_calls`, `app_trace_events`)
+   deliberately untouched.
+4. **UI accessibility pass** (impeccable audit P1s): `:focus-visible` outlines,
+   labeled inputs, `aria-live` chat log and dashboard status, query-builder
+   label associations, and confirm dialogs on Approve/Deny.
+
+Test suite: 147 → 153 tests (145 pass without PG, 8 PG-gated).
 
 ## v1.6.1 — Correctness & Safety Fixes (Sep 1, 2026)
 **Status:** ✅ Completed
