@@ -73,5 +73,8 @@ The supervisor refactor left the following regressions vs documented behavior:
   8 PG-gated).
 
 ## Next Up (recommended order)
-1. Optional builder extensions: table joins via FK graph, GROUP BY/aggregate column, persisted builder-run audit rows.
-2. Optional: Redis service in CI to exercise the distributed-memory path; publish the repo to GitHub so the workflow runs.
+Tracked as tracer-bullet tickets in `.scratch/netsentry-vnext/issues/` (01–10, dependency-ordered; see ticket files for acceptance criteria):
+1. **01** Live-API smoke harness · **02** Publish repo to GitHub + activate CI (gates **03** Redis-in-CI)
+2. **04** Approval-endpoint CSRF · **05** Memory fact deletion UI/API · **08** Builder audit rows · **09** Session lifecycle semantics · **10** Supervisor routing spike
+3. **06** Builder GROUP BY/aggregates → **07** Builder FK joins (sequenced on the same SQL-assembly contract)
+
