@@ -67,6 +67,10 @@ class QueryBuilderRequest(BaseModel):
     limit: int = Field(default=50, ge=1, le=200)
     aggregates: list[AggregateSpec] = []
     group_by: list[str] = []
+    # Join support: `join_column` must be a *declared* foreign key of `table`;
+    # the referenced table is derived from that declaration, never guessed.
+    join_column: str | None = None
+    join_columns: list[str] = []
 
 
 def _is_numeric_column(declared_type):
@@ -92,8 +96,56 @@ def _introspect_table_columns(conn, table):
     ]
 
 
+def _introspect_fks(conn, table):
+    """Declared foreign keys of a table as [{column, target_table, target_column}].
+
+    Only allow-listed targets are returned, and joins are built from these
+    declarations exclusively — the builder never infers a relationship.
+    """
+    if _is_postgres():
+        try:
+            rows = conn.execute(
+                """SELECT kcu.column_name AS from_col, ccu.table_name AS target_table,
+                          ccu.column_name AS target_col
+                   FROM information_schema.table_constraints tc
+                   JOIN information_schema.key_column_usage kcu
+                     ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_name = kcu.table_name
+                   JOIN information_schema.constraint_column_usage ccu
+                     ON tc.constraint_name = ccu.constraint_name
+                   WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = ?""",
+                (table,),
+            ).fetchall()
+        except Exception:
+            return []
+        return [
+            {
+                "column": r["from_col"],
+                "target_table": r["target_table"],
+                "target_column": r["target_col"],
+            }
+            for r in rows
+            if r["target_table"] in config.ALLOWED_TABLES
+        ]
+
+    rows = conn.execute(f'PRAGMA foreign_key_list("{table}")').fetchall()
+    fks = []
+    for r in rows:
+        target = r["table"]
+        if target not in config.ALLOWED_TABLES:
+            continue
+        fks.append(
+            {
+                "column": r["from"],
+                "target_table": target,
+                "target_column": r["to"] or "id",
+            }
+        )
+    return fks
+
+
 def get_builder_schema():
-    """Introspect live columns/types for ALLOWED_TABLES on either dialect."""
+    """Introspect live columns/types/foreign keys for ALLOWED_TABLES."""
     allowed = sorted(config.ALLOWED_TABLES)
     conn = get_connection()
     try:
@@ -101,7 +153,9 @@ def get_builder_schema():
         for table in allowed:
             columns = _introspect_table_columns(conn, table)
             if columns:
-                tables.append({"name": table, "columns": columns})
+                tables.append(
+                    {"name": table, "columns": columns, "fks": _introspect_fks(conn, table)}
+                )
         return {"tables": tables, "operators": list(FILTER_OPERATORS)}
     finally:
         conn.close()
@@ -218,6 +272,97 @@ def _build_aggregate_sql(spec, known):
     return sql, tuple(params), output_names
 
 
+def _build_join_sql(spec, table_meta, known):
+    """FK-join path: base + declared-referenced table, every output aliased.
+
+    Join direction comes exclusively from the declared foreign key the user
+    picked; filters apply to the base table; order-by must be one of the
+    aliased output columns. Output aliases (``orders_total`` etc.) keep
+    duplicate names like ``id`` unambiguous in the result cells.
+    """
+    base = spec.table
+    fk = next(
+        (f for f in table_meta.get("fks", []) if f["column"] == (spec.join_column or "").strip()),
+        None,
+    )
+    if fk is None:
+        declared = ", ".join(
+            f"{f['column']} -> {f['target_table']}" for f in table_meta.get("fks", [])
+        )
+        detail = f" Declared keys: {declared}." if declared else " No foreign keys are declared for this table."
+        raise QueryBuilderError(
+            f"Column '{spec.join_column}' is not a declared foreign key of '{base}'." + detail
+        )
+    target = fk["target_table"]
+    if target not in config.ALLOWED_TABLES:
+        raise QueryBuilderError(f"Joined table '{target}' is not in the allow-list.")
+
+    schema = get_builder_schema()
+    target_meta = next((t for t in schema["tables"] if t["name"] == target), None)
+    if target_meta is None:
+        raise QueryBuilderError(f"Joined table '{target}' does not exist in the database.")
+    target_known = {c["name"]: c for c in target_meta["columns"]}
+
+    base_cols = []
+    for col in spec.columns:
+        col = col.strip()
+        if not col:
+            continue
+        if col not in known:
+            raise QueryBuilderError(
+                f"Column '{col}' does not exist on table '{base}'. Available: {sorted(known)}."
+            )
+        if col not in base_cols:
+            base_cols.append(col)
+    if not base_cols:
+        base_cols = [c["name"] for c in table_meta["columns"]]
+        if not base_cols:
+            raise QueryBuilderError(f"Table '{base}' has no columns.")
+
+    join_cols = []
+    for col in spec.join_columns:
+        col = col.strip()
+        if not col:
+            continue
+        if col not in target_known:
+            raise QueryBuilderError(
+                f"Column '{col}' does not exist on joined table '{target}'."
+                f" Available: {sorted(target_known)}."
+            )
+        if col not in join_cols:
+            join_cols.append(col)
+    if not join_cols:
+        join_cols = [c["name"] for c in target_meta["columns"]]
+        if not join_cols:
+            raise QueryBuilderError(f"Joined table '{target}' has no columns.")
+
+    select_parts = [f'"{base}"."{c}" AS "{base}_{c}"' for c in base_cols]
+    select_parts += [f'"{target}"."{c}" AS "{target}_{c}"' for c in join_cols]
+    output_names = [f"{base}_{c}" for c in base_cols] + [f"{target}_{c}" for c in join_cols]
+
+    where_parts, params = _build_filters(spec, known, base)
+
+    order_by = None
+    if spec.order_by:
+        order_by = spec.order_by.strip()
+        if order_by and order_by not in output_names:
+            raise QueryBuilderError(
+                "When joining, order-by must be one of the selected output columns"
+                f" such as {output_names[:4]}."
+            )
+
+    fk_col = fk["column"]
+    fk_target_col = fk["target_column"]
+    sql = f'SELECT {", ".join(select_parts)} FROM "{base}"'
+    sql += f' JOIN "{target}" ON "{base}"."{fk_col}" = "{target}"."{fk_target_col}"'
+    if where_parts:
+        sql += " WHERE " + " AND ".join(where_parts)
+    if order_by:
+        sql += f' ORDER BY "{order_by}" {spec.order_dir}'
+    sql += f" LIMIT {int(spec.limit)}"
+    return sql, tuple(params), output_names
+
+
 def build_select_sql(spec):
     """Validate spec against the live schema and build (sql, params, columns).
 
@@ -236,6 +381,13 @@ def build_select_sql(spec):
     if table_meta is None:
         raise QueryBuilderError(f"Table '{spec.table}' does not exist in the database.")
     known = {c["name"]: c for c in table_meta["columns"]}
+
+    if spec.join_column:
+        if spec.aggregates or spec.group_by:
+            raise QueryBuilderError(
+                "Joins cannot be combined with aggregates or group-by yet."
+            )
+        return _build_join_sql(spec, table_meta, known)
 
     if spec.aggregates or spec.group_by:
         return _build_aggregate_sql(spec, known)

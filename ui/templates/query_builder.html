@@ -42,6 +42,10 @@
       <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Group by <span style="text-transform:none;letter-spacing:0;">(optional — one row per group)</span></label>
       <div id="qb-groupby" class="row" role="group" aria-label="Group by columns"></div>
 
+      <label class="muted" for="qb-join" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Join with <span style="text-transform:none;letter-spacing:0;">(optional — declared foreign keys only · not combinable with aggregates)</span></label>
+      <select id="qb-join" class="qb-input" aria-label="Join with"><option value="">(no join)</option></select>
+      <div id="qb-join-columns" class="row" role="group" aria-label="Joined table columns" style="display:none;"></div>
+
       <div class="row">
         <span>
           <label class="muted" for="qb-order" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;display:block;">Order by</label>
@@ -161,6 +165,27 @@ function onTableChange() {
   addFilterRow();
   document.getElementById("qb-aggs").innerHTML = "";
   addAggRow();
+
+  const joinSel = document.getElementById("qb-join");
+  const fks = meta && meta.fks ? meta.fks : [];
+  joinSel.innerHTML = '<option value="">(no join)</option>' + fks.map(fk =>
+    '<option value="' + esc(fk.column) + '">' + esc(fk.column) + " → " + esc(fk.target_table) + "</option>").join("");
+  renderJoinColumns();
+}
+
+function renderJoinColumns() {
+  const joinSel = document.getElementById("qb-join");
+  const box = document.getElementById("qb-join-columns");
+  const meta = currentTableMeta();
+  const fks = meta && meta.fks ? meta.fks : [];
+  const fk = fks.find(f => f.column === joinSel.value);
+  if (!fk) { box.style.display = "none"; box.innerHTML = ""; return; }
+  const target = schemaState.tables.find(t => t.name === fk.target_table);
+  const cols = target ? target.columns : [];
+  box.style.display = "";
+  box.innerHTML = cols.map(c =>
+    '<label class="qb-col-chip"><input type="checkbox" value="' + esc(c.name) + '"> ' +
+    esc(c.name) + ' <span class="muted">' + esc(fk.target_table) + "</span></label>").join("");
 }
 
 function addAggRow() {
@@ -212,6 +237,9 @@ function collectSpec() {
   }));
   const groupBy = Array.from(
     document.querySelectorAll("#qb-groupby input:checked")).map(cb => cb.value);
+  const joinColumn = document.getElementById("qb-join").value || null;
+  const joinColumns = Array.from(
+    document.querySelectorAll("#qb-join-columns input:checked")).map(cb => cb.value);
   const aggregateMode = aggregates.length > 0 || groupBy.length > 0;
   return {
     table,
@@ -222,6 +250,8 @@ function collectSpec() {
     limit: parseInt(document.getElementById("qb-limit").value, 10) || 50,
     aggregates,
     group_by: groupBy,
+    join_column: joinColumn,
+    join_columns: joinColumns,
   };
 }
 
@@ -283,6 +313,7 @@ document.getElementById("run-button").addEventListener("click", async () => {
 document.getElementById("add-filter").addEventListener("click", addFilterRow);
 document.getElementById("add-agg").addEventListener("click", addAggRow);
 document.getElementById("qb-table").addEventListener("change", onTableChange);
+document.getElementById("qb-join").addEventListener("change", renderJoinColumns);
 
 loadSchema();
 </script>
