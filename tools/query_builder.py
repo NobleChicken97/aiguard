@@ -42,11 +42,20 @@ FILTER_OPERATORS = ("=", "!=", ">", ">=", "<", "<=", "LIKE")
 
 _NUMERIC_TYPE_TOKENS = ("INT", "REAL", "FLOA", "DOUB", "NUM", "DEC")
 
+AGGREGATE_FUNCTIONS = ("COUNT", "SUM", "AVG", "MIN", "MAX")
+
 
 class FilterCondition(BaseModel):
     column: str
     operator: Literal["=", "!=", ">", ">=", "<", "<=", "LIKE"]
     value: str
+
+
+class AggregateSpec(BaseModel):
+    """One aggregate expression; ``column=None`` means COUNT(*)."""
+
+    function: Literal["COUNT", "SUM", "AVG", "MIN", "MAX"]
+    column: str | None = None
 
 
 class QueryBuilderRequest(BaseModel):
@@ -56,6 +65,8 @@ class QueryBuilderRequest(BaseModel):
     order_by: str | None = None
     order_dir: Literal["ASC", "DESC"] = "ASC"
     limit: int = Field(default=50, ge=1, le=200)
+    aggregates: list[AggregateSpec] = []
+    group_by: list[str] = []
 
 
 def _is_numeric_column(declared_type):
@@ -96,41 +107,12 @@ def get_builder_schema():
         conn.close()
 
 
-def build_select_sql(spec):
-    """Validate spec against the live schema and build (sql, params, columns).
+def _build_filters(spec, known, table):
+    """Validate filter conditions against known columns; return (parts, params).
 
-    Raises QueryBuilderError with an operator-friendly message for any
-    reference outside the allow-listed schema. Values are never interpolated;
-    they are returned as bound parameters.
+    Shared by the plain and aggregate paths so both apply identical
+    numeric-coercion and LIKE rules.
     """
-    if spec.table not in config.ALLOWED_TABLES:
-        raise QueryBuilderError(
-            f"Table '{spec.table}' is not in the allow-list: {sorted(config.ALLOWED_TABLES)}."
-        )
-
-    schema = get_builder_schema()
-    table_meta = next((t for t in schema["tables"] if t["name"] == spec.table), None)
-    if table_meta is None:
-        raise QueryBuilderError(f"Table '{spec.table}' does not exist in the database.")
-    known = {c["name"]: c for c in table_meta["columns"]}
-
-    selected = []
-    for col in spec.columns:
-        col = col.strip()
-        if not col:
-            continue
-        if col not in known:
-            raise QueryBuilderError(
-                f"Column '{col}' does not exist on table '{spec.table}'."
-                f" Available: {sorted(known)}."
-            )
-        if col not in selected:
-            selected.append(col)
-    if not selected:
-        selected = [c["name"] for c in table_meta["columns"]]
-        if not selected:
-            raise QueryBuilderError(f"Table '{spec.table}' has no columns.")
-
     where_parts = []
     params = []
     for f in spec.filters:
@@ -140,7 +122,7 @@ def build_select_sql(spec):
         col_meta = known.get(f.column)
         if col_meta is None:
             raise QueryBuilderError(
-                f"Filter column '{f.column}' does not exist on table '{spec.table}'."
+                f"Filter column '{f.column}' does not exist on table '{table}'."
                 f" Available: {sorted(known)}."
             )
         numeric = _is_numeric_column(col_meta["type"])
@@ -162,6 +144,120 @@ def build_select_sql(spec):
         else:
             params.append(value)
         where_parts.append(f'"{f.column}" {f.operator} ?')
+    return where_parts, params
+
+
+def _build_aggregate_sql(spec, known):
+    """Aggregate/group-by path: group columns + aggregate aliases only."""
+    if spec.columns:
+        raise QueryBuilderError(
+            "Plain columns cannot be combined with aggregates or group-by;"
+            " add those columns to 'group by' instead."
+        )
+
+    group_cols = []
+    for col in spec.group_by:
+        col = (col or "").strip()
+        if not col:
+            continue
+        if col not in known:
+            raise QueryBuilderError(
+                f"Group-by column '{col}' does not exist on table '{spec.table}'."
+                f" Available: {sorted(known)}."
+            )
+        if col not in group_cols:
+            group_cols.append(col)
+
+    select_parts = [f'"{c}"' for c in group_cols]
+    output_names = list(group_cols)
+    for agg in spec.aggregates:
+        func = agg.function
+        if agg.column is None:
+            if func != "COUNT":
+                raise QueryBuilderError(
+                    f"{func}(*) is not supported; '(all rows)' aggregates require COUNT."
+                )
+            alias = "count_all"
+            expr = "COUNT(*)"
+        else:
+            col = agg.column.strip()
+            if col not in known:
+                raise QueryBuilderError(
+                    f"Aggregate column '{col}' does not exist on table '{spec.table}'."
+                    f" Available: {sorted(known)}."
+                )
+            if func in ("SUM", "AVG") and not _is_numeric_column(known[col]["type"]):
+                raise QueryBuilderError(
+                    f"{func} requires a numeric column;"
+                    f" '{col}' is {known[col]['type'] or 'non-numeric'}."
+                )
+            alias = f"{func.lower()}_{col}"
+            expr = f'{func}("{col}")'
+        select_parts.append(f'{expr} AS "{alias}"')
+        output_names.append(alias)
+
+    where_parts, params = _build_filters(spec, known, spec.table)
+
+    order_by = None
+    if spec.order_by:
+        order_by = spec.order_by.strip()
+        if order_by and order_by not in group_cols and order_by not in output_names:
+            raise QueryBuilderError(
+                "When aggregating, order-by must be a group-by column or an"
+                f" aggregate alias (one of: {output_names})."
+            )
+
+    sql = f'SELECT {", ".join(select_parts)} FROM "{spec.table}"'
+    if where_parts:
+        sql += " WHERE " + " AND ".join(where_parts)
+    if group_cols:
+        sql += " GROUP BY " + ", ".join(f'"{c}"' for c in group_cols)
+    if order_by:
+        sql += f' ORDER BY "{order_by}" {spec.order_dir}'
+    sql += f" LIMIT {int(spec.limit)}"
+    return sql, tuple(params), output_names
+
+
+def build_select_sql(spec):
+    """Validate spec against the live schema and build (sql, params, columns).
+
+    Raises QueryBuilderError with an operator-friendly message for any
+    reference outside the allow-listed schema. Values are never interpolated;
+    they are returned as bound parameters. Returns the *output* column names
+    (aliases included for aggregates) so result cells can be indexed by name.
+    """
+    if spec.table not in config.ALLOWED_TABLES:
+        raise QueryBuilderError(
+            f"Table '{spec.table}' is not in the allow-list: {sorted(config.ALLOWED_TABLES)}."
+        )
+
+    schema = get_builder_schema()
+    table_meta = next((t for t in schema["tables"] if t["name"] == spec.table), None)
+    if table_meta is None:
+        raise QueryBuilderError(f"Table '{spec.table}' does not exist in the database.")
+    known = {c["name"]: c for c in table_meta["columns"]}
+
+    if spec.aggregates or spec.group_by:
+        return _build_aggregate_sql(spec, known)
+
+    selected = []
+    for col in spec.columns:
+        col = col.strip()
+        if not col:
+            continue
+        if col not in known:
+            raise QueryBuilderError(
+                f"Column '{col}' does not exist on table '{spec.table}'."
+                f" Available: {sorted(known)}."
+            )
+        if col not in selected:
+            selected.append(col)
+    if not selected:
+        selected = [c["name"] for c in table_meta["columns"]]
+        if not selected:
+            raise QueryBuilderError(f"Table '{spec.table}' has no columns.")
+
+    where_parts, params = _build_filters(spec, known, spec.table)
 
     order_by = None
     if spec.order_by:

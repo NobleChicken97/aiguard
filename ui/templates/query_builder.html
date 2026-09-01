@@ -24,7 +24,7 @@
       <label class="muted" for="qb-table" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Table</label>
       <select id="qb-table" class="qb-input"></select>
 
-      <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Columns <span style="text-transform:none;letter-spacing:0;">(none checked = all)</span></label>
+      <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Columns <span style="text-transform:none;letter-spacing:0;">(none checked = all · ignored when aggregates are set)</span></label>
       <div id="qb-columns" class="row" role="group" aria-label="Columns to include"></div>
 
       <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Filters</label>
@@ -32,6 +32,15 @@
       <div class="row">
         <button type="button" class="button secondary" id="add-filter">+ Add filter</button>
       </div>
+
+      <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Aggregates <span style="text-transform:none;letter-spacing:0;">(optional — switches to aggregate mode)</span></label>
+      <div id="qb-aggs" class="stack"></div>
+      <div class="row">
+        <button type="button" class="button secondary" id="add-agg">+ Add aggregate</button>
+      </div>
+
+      <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Group by <span style="text-transform:none;letter-spacing:0;">(optional — one row per group)</span></label>
+      <div id="qb-groupby" class="row" role="group" aria-label="Group by columns"></div>
 
       <div class="row">
         <span>
@@ -139,12 +148,37 @@ function onTableChange() {
     '<label class="qb-col-chip"><input type="checkbox" value="' + esc(c.name) + '"> ' +
     esc(c.name) + ' <span class="muted">' + esc(c.type || "?") + "</span></label>").join("");
 
+  const groupBox = document.getElementById("qb-groupby");
+  groupBox.innerHTML = cols.map(c =>
+    '<label class="qb-col-chip"><input type="checkbox" value="' + esc(c.name) + '"> ' +
+    esc(c.name) + "</label>").join("");
+
   const orderSel = document.getElementById("qb-order");
   orderSel.innerHTML = '<option value="">(none)</option>' + cols.map(c =>
     '<option value="' + esc(c.name) + '">' + esc(c.name) + "</option>").join("");
 
   document.getElementById("qb-filters").innerHTML = "";
   addFilterRow();
+  document.getElementById("qb-aggs").innerHTML = "";
+  addAggRow();
+}
+
+function addAggRow() {
+  const meta = currentTableMeta();
+  const cols = meta ? meta.columns : [];
+  const wrap = document.createElement("div");
+  wrap.className = "qb-filter-row";
+  wrap.innerHTML =
+    '<select class="qb-input qb-agg-func" aria-label="Aggregate function">' +
+      ["COUNT", "SUM", "AVG", "MIN", "MAX"].map(f => "<option>" + f + "</option>").join("") +
+      "</select>" +
+    '<select class="qb-input qb-agg-col" aria-label="Aggregate column">' +
+      '<option value="">(all rows — COUNT only)</option>' +
+      cols.map(c => '<option value="' + esc(c.name) + '">' + esc(c.name) + "</option>").join("") +
+      "</select>" +
+    '<button type="button" class="button deny qb-agg-del" title="remove" aria-label="Remove aggregate">×</button>';
+  wrap.querySelector(".qb-agg-del").addEventListener("click", () => wrap.remove());
+  document.getElementById("qb-aggs").appendChild(wrap);
 }
 
 function addFilterRow() {
@@ -172,13 +206,22 @@ function collectSpec() {
     operator: row.querySelector(".qb-f-op").value,
     value: row.querySelector(".qb-f-val").value,
   })).filter(f => f.value.trim() !== "");
+  const aggregates = Array.from(document.querySelectorAll(".qb-agg-row, #qb-aggs .qb-filter-row")).map(row => ({
+    function: row.querySelector(".qb-agg-func").value,
+    column: row.querySelector(".qb-agg-col").value || null,
+  }));
+  const groupBy = Array.from(
+    document.querySelectorAll("#qb-groupby input:checked")).map(cb => cb.value);
+  const aggregateMode = aggregates.length > 0 || groupBy.length > 0;
   return {
     table,
-    columns,
+    columns: aggregateMode ? [] : columns,
     filters,
     order_by: document.getElementById("qb-order").value || null,
     order_dir: document.getElementById("qb-dir").value,
     limit: parseInt(document.getElementById("qb-limit").value, 10) || 50,
+    aggregates,
+    group_by: groupBy,
   };
 }
 
@@ -238,6 +281,7 @@ document.getElementById("run-button").addEventListener("click", async () => {
 });
 
 document.getElementById("add-filter").addEventListener("click", addFilterRow);
+document.getElementById("add-agg").addEventListener("click", addAggRow);
 document.getElementById("qb-table").addEventListener("change", onTableChange);
 
 loadSchema();
