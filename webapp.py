@@ -1,10 +1,11 @@
 import asyncio
 import json
+import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -323,6 +324,24 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+CSRF_COOKIE = "approval_csrf"
+
+
+def _csrf_ok(request: Request, submitted_token: str) -> bool:
+    """Double-submit cookie check for the approval form posts.
+
+    The queue page sets a random token both as an HttpOnly cookie and as a
+    hidden form field; cross-site form posts cannot know the cookie value,
+    so a mismatch (or either half missing) rejects the action. Approval
+    ids are unguessable uuid4s, so this is defense in depth on top of an
+    intentionally login-free demo — not a substitute for real auth.
+    """
+    cookie_token = request.cookies.get(CSRF_COOKIE, "")
+    if not cookie_token or not submitted_token:
+        return False
+    return secrets.compare_digest(cookie_token, submitted_token)
+
+
 @app.get("/", response_class=HTMLResponse)
 def root():
     return RedirectResponse(url="/chat", status_code=303)
@@ -477,26 +496,34 @@ def delete_user_fact(user_id: str, fact_id: str):
 
 @app.get("/approval-queue", response_class=HTMLResponse)
 def approval_queue(request: Request):
-    return templates.TemplateResponse(
+    csrf_token = secrets.token_urlsafe(32)
+    response = templates.TemplateResponse(
         request=request,
         name="approval_queue.html",
         context={
             "request": request,
             "pending_approvals": _build_pending_rows(),
             "session_count": len(_load_sessions()),
+            "csrf_token": csrf_token,
         },
     )
+    response.set_cookie(CSRF_COOKIE, csrf_token, httponly=True, samesite="lax")
+    return response
 
 
 @app.post("/approvals/{approval_id}/approve")
-def approve_action(approval_id: str):
+def approve_action(approval_id: str, request: Request, csrf_token: str = Form("")):
+    if not _csrf_ok(request, csrf_token):
+        raise HTTPException(status_code=403, detail="Invalid or missing CSRF token.")
     if not resolve_approval(approval_id, "approved"):
         raise HTTPException(status_code=404, detail="Approval request not found or already resolved.")
     return RedirectResponse(url="/approval-queue", status_code=303)
 
 
 @app.post("/approvals/{approval_id}/deny")
-def deny_action(approval_id: str):
+def deny_action(approval_id: str, request: Request, csrf_token: str = Form("")):
+    if not _csrf_ok(request, csrf_token):
+        raise HTTPException(status_code=403, detail="Invalid or missing CSRF token.")
     if not resolve_approval(approval_id, "denied"):
         raise HTTPException(status_code=404, detail="Approval request not found or already resolved.")
     return RedirectResponse(url="/approval-queue", status_code=303)

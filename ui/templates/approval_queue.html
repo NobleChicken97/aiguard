@@ -36,10 +36,12 @@
           <div class="row" style="margin-top: 0.8rem;">
             <form action="/approvals/{{ item.approval_id }}/approve" method="post"
                   onsubmit="return confirm('Approve this action? It will execute against the database.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <button class="button approve" type="submit">Approve</button>
             </form>
             <form action="/approvals/{{ item.approval_id }}/deny" method="post"
                   onsubmit="return confirm('Deny this action? The agent will be told to refuse it.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <button class="button deny" type="submit">Deny</button>
             </form>
           </div>

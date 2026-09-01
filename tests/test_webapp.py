@@ -1,5 +1,6 @@
 from uuid import uuid4
 
+import re
 import sys
 import threading
 import time
@@ -24,6 +25,18 @@ import webapp as webapp_module
 def fresh_db():
     reset_db()
     seed_demo_data()
+
+
+_CSRF_INPUT_RE = re.compile(r'name="csrf_token" value="([^"]+)"')
+
+
+def _page_csrf_token(client):
+    """Fetch the approval queue and return the embedded CSRF token."""
+    page = client.get("/approval-queue")
+    assert page.status_code == 200
+    match = _CSRF_INPUT_RE.search(page.text)
+    assert match, "approval queue page must embed a CSRF token"
+    return match.group(1)
 
 
 def _seed_pending_action(sql):
@@ -62,12 +75,33 @@ def test_approval_queue_renders_and_resolves_actions():
         assert page.status_code == 200
         assert approval_id in page.text
 
-        resolved = client.post(f"/approvals/{approval_id}/approve")
+        token = _page_csrf_token(client)
+        resolved = client.post(f"/approvals/{approval_id}/approve", data={"csrf_token": token})
         assert resolved.status_code in (200, 303)
 
         refreshed = client.get("/approval-queue")
         assert approval_id not in refreshed.text
         assert "There are no pending approvals" in refreshed.text or "Clear" in refreshed.text
+
+
+def test_approval_actions_reject_missing_or_wrong_csrf_token():
+    approval_id, _session_id = _seed_pending_action(
+        "UPDATE customers SET city = 'CSRF City' WHERE id = 1;"
+    )
+    with TestClient(app) as client:
+        client.get("/approval-queue")  # sets the CSRF cookie
+
+        no_token = client.post(f"/approvals/{approval_id}/approve")
+        assert no_token.status_code == 403
+
+        wrong_token = client.post(
+            f"/approvals/{approval_id}/deny", data={"csrf_token": "not-the-token"}
+        )
+        assert wrong_token.status_code == 403
+
+        # The action was not resolved by either rejected post.
+        page = client.get("/approval-queue")
+        assert approval_id in page.text
 
 
 def test_trace_replay_page_and_api_show_session_events():
@@ -301,7 +335,8 @@ def test_web_approval_queue_endpoint_resolves_pending():
         assert before.status_code == 200
         assert approval_id in before.text
 
-        resp = client.post(f"/approvals/{approval_id}/approve")
+        token = _page_csrf_token(client)
+        resp = client.post(f"/approvals/{approval_id}/approve", data={"csrf_token": token})
         assert resp.status_code in (200, 303)
 
         after = client.get("/approval-queue")
