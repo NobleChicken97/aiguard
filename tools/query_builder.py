@@ -15,11 +15,15 @@ Safety model (mirrors the agent's sql_tool path):
   preserving the invariant that every execution path crosses the guardrail.
 - Result cells go through PIIGuardrail masking exactly like sql_tool output.
 
-This feature is intentionally read-only and session-less: it neither writes
-to the demo data nor emits trace events, so it cannot pollute agent metrics.
+Audit trail: each run persists one row to the dedicated ``app_builder_runs``
+table (SQL, verdict, row count, timing). The table is deliberately separate
+from ``app_tool_calls``/``app_trace_events`` so builder activity stays
+visible on its own without ever polluting agent metrics.
 """
 
 import time
+import uuid
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, Field
 from typing import Literal
@@ -178,6 +182,34 @@ def build_select_sql(spec):
     return sql, tuple(params), selected
 
 
+def _audit_run(table_name, sql, verdict, row_count, elapsed_ms):
+    """Persist one audit row per builder run to ``app_builder_runs``.
+
+    Deliberately not ``app_tool_calls``: builder runs are human-initiated,
+    session-less reads, and keeping them in their own table lets the
+    dashboard show builder usage without inflating agent metrics.
+    """
+    conn = get_connection()
+    try:
+        conn.execute(
+            """INSERT INTO app_builder_runs
+               (run_id, table_name, sql_text, verdict, row_count, elapsed_ms, executed_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(uuid.uuid4()),
+                table_name,
+                sql,
+                verdict,
+                row_count,
+                elapsed_ms,
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def run_builder_query(spec):
     """Build, guardrail-check, execute, and PII-mask a builder SELECT."""
     started = time.perf_counter()
@@ -185,6 +217,7 @@ def run_builder_query(spec):
 
     result = SQLGuardrail().check(sql)
     if not result.allowed:
+        _audit_run(spec.table, sql, result.verdict, 0, round((time.perf_counter() - started) * 1000, 2))
         return {
             "sql": sql,
             "guardrail": result.to_dict(),
@@ -206,11 +239,13 @@ def run_builder_query(spec):
         [PIIGuardrail.mask_pii(cell) if isinstance(cell, str) else cell for cell in row_cells]
         for row_cells in cells
     ]
+    elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+    _audit_run(spec.table, sql, result.verdict, len(masked_rows), elapsed_ms)
     return {
         "sql": sql,
         "guardrail": result.to_dict(),
         "columns": columns,
         "rows": masked_rows,
         "row_count": len(masked_rows),
-        "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+        "elapsed_ms": elapsed_ms,
     }

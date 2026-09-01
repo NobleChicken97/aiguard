@@ -29,6 +29,11 @@
     <div class="muted" id="stat-tools-top">—</div>
   </div></div>
   <div class="card"><div class="card-body" style="text-align:center;">
+    <div class="muted" style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.12em;">Builder Runs</div>
+    <div style="font-size:2.2rem;font-weight:800;" id="stat-builder">–</div>
+    <div class="muted"><a href="/query-builder">open builder →</a></div>
+  </div></div>
+  <div class="card"><div class="card-body" style="text-align:center;">
     <div class="muted" style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.12em;">Pending Approvals</div>
     <div style="font-size:2.2rem;font-weight:800;" id="stat-approvals">–</div>
     <div class="muted"><a href="/approval-queue">review queue →</a></div>
@@ -79,6 +84,7 @@ function render(stats) {
   document.getElementById("stat-active").textContent = "active: " + stats.active_sessions;
   document.getElementById("stat-messages").textContent = stats.messages;
   document.getElementById("stat-toolcalls").textContent = stats.tool_calls;
+  document.getElementById("stat-builder").textContent = stats.builder_runs ?? "–";
 
   const tools = Object.entries(stats.tools || {});
   document.getElementById("stat-tools-top").textContent =

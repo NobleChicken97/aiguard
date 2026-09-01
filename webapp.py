@@ -127,6 +127,7 @@ def _compute_stats():
             )
             messages = _count("SELECT COUNT(*) AS cnt FROM app_messages")
             tool_calls = _count("SELECT COUNT(*) AS cnt FROM app_tool_calls")
+            builder_runs = _count("SELECT COUNT(*) AS cnt FROM app_builder_runs")
 
             tool_rows = conn.execute(
                 """SELECT tool_name, COUNT(*) AS cnt FROM app_tool_calls
@@ -172,6 +173,7 @@ def _compute_stats():
             "active_sessions": active_sessions,
             "messages": messages,
             "tool_calls": tool_calls,
+            "builder_runs": builder_runs,
             "pending_approvals": len(get_pending_approvals()),
             "guardrail": {
                 "allowed_recent": allowed,
@@ -189,6 +191,7 @@ def _compute_stats():
             "active_sessions": 0,
             "messages": 0,
             "tool_calls": 0,
+            "builder_runs": 0,
             "pending_approvals": 0,
             "guardrail": {"allowed_recent": 0, "blocked_recent": 0, "approval_required_recent": 0},
             "tools": {},

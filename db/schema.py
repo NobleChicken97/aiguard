@@ -55,6 +55,16 @@ CREATE TABLE IF NOT EXISTS app_trace_events (
     data         TEXT NOT NULL,
     timestamp    TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS app_builder_runs (
+    run_id       TEXT PRIMARY KEY,
+    table_name   TEXT NOT NULL,
+    sql_text     TEXT NOT NULL,
+    verdict      TEXT NOT NULL,
+    row_count    INTEGER NOT NULL DEFAULT 0,
+    elapsed_ms   REAL NOT NULL DEFAULT 0,
+    executed_at  TEXT NOT NULL
+);
 """
 
 DEMO_SCHEMA = """
