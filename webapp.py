@@ -373,10 +373,7 @@ async def chat_api(req: ChatRequest, request: Request):
     else:
         orchestrator.start_session()
 
-    async def run_orchestrator():
-        return await run_in_threadpool(orchestrator.run, req.message)
-        
-    response_text = await run_orchestrator()
+    response_text = await run_in_threadpool(orchestrator.run, req.message)
     return JSONResponse({
         "session_id": orchestrator.session_id,
         "response": response_text,

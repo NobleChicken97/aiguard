@@ -11,8 +11,10 @@ def _is_postgres():
 def _init_pg_pool():
     global _pg_pool
     if _pg_pool is None and _is_postgres():
-        from psycopg2.pool import SimpleConnectionPool
-        _pg_pool = SimpleConnectionPool(1, 20, config.DATABASE_URL)
+        # ThreadedConnectionPool: FastAPI serves sync endpoints from a
+        # threadpool, so concurrent getconn() calls are the normal case.
+        from psycopg2.pool import ThreadedConnectionPool
+        _pg_pool = ThreadedConnectionPool(1, 20, config.DATABASE_URL)
 
 def get_db_path():
     path = config.DB_PATH
@@ -67,6 +69,9 @@ def get_connection():
         conn = sqlite3.connect(path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
+        # Wait instead of failing instantly when another threadpool thread
+        # holds the write lock ("database is locked" under concurrency).
+        conn.execute("PRAGMA busy_timeout=5000")
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
 
