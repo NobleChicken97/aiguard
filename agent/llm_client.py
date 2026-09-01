@@ -28,6 +28,14 @@ class ContentBlock:
         )
 
     def to_dict(self):
+        """Serialize to the Anthropic Messages API wire format.
+
+        Assistant ``tool_use`` blocks must use the keys ``id``/``name``/
+        ``input`` — emitting the internal field names (``tool_use_id`` etc.)
+        makes the next ``messages.create`` call fail with a 400 once the
+        block is appended back into the conversation (workers do exactly
+        that after executing a tool).
+        """
         d = {"type": self.type}
         if self.text is not None:
             d["text"] = self.text
@@ -113,17 +121,22 @@ class FakeLLMClient:
 
     Supervisor routing prompts are intercepted (never consume scripted
     responses) and answered with ``route_decision`` — "SQL" by default, or
-    "RESEARCH" to exercise the research-worker path in tests.
+    "RESEARCH" to exercise the research-worker path in tests. Memory
+    distillation prompts are intercepted the same way: they return
+    ``distill_facts`` lines (default: none), or scripted responses when
+    ``distill_facts`` is explicitly provided.
     """
 
-    def __init__(self, responses, route_decision="SQL"):
+    def __init__(self, responses, route_decision="SQL", distill_facts=None):
         self._responses = list(responses)
         self._index = 0
         self.call_count = 0
         self.route_decision = route_decision
+        self.distill_facts = distill_facts
 
     def call(self, system, messages, tools=None):
-        if "router" in system.lower():
+        lowered = system.lower()
+        if "router" in lowered:
             # Intercept router prompt so we don't consume a scripted response
             return LLMResponse(
                 stop_reason="end_turn",
@@ -131,7 +144,16 @@ class FakeLLMClient:
                 input_tokens=10,
                 output_tokens=10,
             )
-        
+
+        if "factual statements" in lowered:
+            text = "\n".join(self.distill_facts) if self.distill_facts else ""
+            return LLMResponse(
+                stop_reason="end_turn",
+                content=[ContentBlock(type="text", text=text)],
+                input_tokens=10,
+                output_tokens=10,
+            )
+
         if self._index >= len(self._responses):
             return LLMResponse(
                 stop_reason="end_turn",
