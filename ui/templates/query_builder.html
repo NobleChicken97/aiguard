@@ -21,11 +21,11 @@
       <span class="badge good" id="schema-badge">loading schema…</span>
     </div>
     <div class="card-body stack">
-      <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Table</label>
+      <label class="muted" for="qb-table" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Table</label>
       <select id="qb-table" class="qb-input"></select>
 
       <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Columns <span style="text-transform:none;letter-spacing:0;">(none checked = all)</span></label>
-      <div id="qb-columns" class="row"></div>
+      <div id="qb-columns" class="row" role="group" aria-label="Columns to include"></div>
 
       <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Filters</label>
       <div id="qb-filters" class="stack"></div>
@@ -35,15 +35,15 @@
 
       <div class="row">
         <span>
-          <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;display:block;">Order by</label>
+          <label class="muted" for="qb-order" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;display:block;">Order by</label>
           <select id="qb-order" class="qb-input"><option value="">(none)</option></select>
         </span>
         <span>
-          <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;display:block;">Direction</label>
+          <label class="muted" for="qb-dir" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;display:block;">Direction</label>
           <select id="qb-dir" class="qb-input"><option>ASC</option><option>DESC</option></select>
         </span>
         <span>
-          <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;display:block;">Limit (1–200)</label>
+          <label class="muted" for="qb-limit" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;display:block;">Limit (1–200)</label>
           <input id="qb-limit" type="number" min="1" max="200" value="50" class="qb-input" style="width:7rem;">
         </span>
       </div>
@@ -157,8 +157,8 @@ function addFilterRow() {
       '<option value="' + esc(c.name) + '">' + esc(c.name) + "</option>").join("") + "</select>" +
     '<select class="qb-input qb-f-op">' + schemaState.operators.map(op =>
       "<option>" + esc(op) + "</option>").join("") + "</select>" +
-    '<input class="qb-input qb-f-val" placeholder="value" style="flex:1;min-width:6rem;">' +
-    '<button type="button" class="button deny qb-f-del" title="remove">×</button>';
+    '<input class="qb-input qb-f-val" placeholder="value" aria-label="Filter value" style="flex:1;min-width:6rem;">' +
+    '<button type="button" class="button deny qb-f-del" title="remove" aria-label="Remove filter">×</button>';
   wrap.querySelector(".qb-f-del").addEventListener("click", () => wrap.remove());
   document.getElementById("qb-filters").appendChild(wrap);
 }

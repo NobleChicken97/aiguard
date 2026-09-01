@@ -20,7 +20,7 @@
       <span class="badge good">Live</span>
     </div>
     <div class="card-body">
-      <div id="chat-history" class="timeline" style="max-height: 60vh; overflow-y: auto;">
+      <div id="chat-history" class="timeline" role="log" aria-live="polite" style="max-height: 60vh; overflow-y: auto;">
         <div class="approval">
           <p class="muted" style="margin-bottom: 0;">Type a message below to start.</p>
         </div>
@@ -28,7 +28,7 @@
 
       <form id="chat-form" style="margin-top: 1rem;">
         <div class="row" style="align-items: stretch;">
-          <input id="message-input" type="text" placeholder="Ask the agent something..." autocomplete="off"
+          <input id="message-input" type="text" placeholder="Ask the agent something..." autocomplete="off" aria-label="Message"
                  style="flex: 1; background: rgba(2, 6, 23, 0.7); border: 1px solid var(--panel-border); border-radius: 0.8rem; padding: 0.8rem 1rem; color: var(--text); font: inherit; min-width: 0;">
           <button class="button approve" type="submit" id="send-button">Send</button>
         </div>

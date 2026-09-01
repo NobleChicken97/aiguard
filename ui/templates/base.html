@@ -33,6 +33,12 @@
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
+    a:focus-visible, button:focus-visible, input:focus-visible,
+    select:focus-visible, [tabindex]:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
     .shell {
       width: min(1180px, calc(100% - 2rem));
       margin: 0 auto;
@@ -217,7 +223,7 @@
 </head>
 <body>
   <main class="shell">
-    <nav class="nav">
+    <nav class="nav" aria-label="Primary">
       <a href="/chat">Chat</a>
       <a href="/dashboard">Dashboard</a>
       <a href="/query-builder">Query Builder</a>
