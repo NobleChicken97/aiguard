@@ -111,26 +111,9 @@ class SQLTool(Tool):
             )
 
         if result.requires_approval:
-            if self.approval_handler is None:
-                return ToolResult(
-                    status="blocked",
-                    output=f"Approval required but no handler configured: {result.reason}",
-                    guardrail_verdict=result.verdict,
-                )
-            if _trace:
-                _trace.log_approval_request(call_id, result.reason)
-            approved = self.approval_handler.request_approval(
-                call_id, session_id, result.reason, "sql_tool", {"sql": sql}
-            )
-            if _trace:
-                _trace.log_approval_decision(call_id, "approved" if approved else "denied")
-            if not approved:
-                return ToolResult(
-                    status="denied",
-                    output=f"Action denied by human: {result.reason}",
-                    guardrail_verdict=result.verdict,
-                    approval_reason=result.reason,
-                )
+            gated = self._approval_gate(result.reason, sql, call_id, session_id, _trace)
+            if gated is not None:
+                return gated
 
         if result.statement_type in ("UPDATE", "DELETE") and result.verdict == VERDICT_ALLOWED:
             approval_needed = self._check_row_count(sql, result, call_id, session_id, _trace)
@@ -139,10 +122,47 @@ class SQLTool(Tool):
 
         return self._execute_sql(sql, call_id, result)
 
+    def _approval_gate(self, reason, sql, call_id, session_id, _trace):
+        """Shared approval flow for every gated write.
+
+        Returns a ToolResult when the action must not proceed (no handler
+        configured, or denied by the human) and ``None`` when approved.
+        """
+        if self.approval_handler is None:
+            return ToolResult(
+                status="blocked",
+                output=f"Approval required but no handler configured: {reason}",
+                guardrail_verdict=VERDICT_REQUIRES_APPROVAL,
+                approval_reason=reason,
+            )
+        if _trace:
+            _trace.log_approval_request(call_id, reason)
+        approved = self.approval_handler.request_approval(
+            call_id, session_id, reason, "sql_tool", {"sql": sql}
+        )
+        if _trace:
+            _trace.log_approval_decision(call_id, "approved" if approved else "denied")
+        if not approved:
+            return ToolResult(
+                status="denied",
+                output=f"Action denied by human: {reason}",
+                guardrail_verdict=VERDICT_REQUIRES_APPROVAL,
+                approval_reason=reason,
+            )
+        return None
+
     def _check_row_count(self, sql, guardrail_result, call_id, session_id, _trace):
         count = self._estimate_affected_rows(sql)
         if count is None:
-            return None
+            # Fail closed: the blast radius cannot be bounded, so the
+            # statement is treated like any other bulk operation instead of
+            # silently skipping the row-count gate.
+            reason = (
+                f"{guardrail_result.statement_type} affected-row count could not be "
+                f"estimated, so it cannot be shown to stay within the threshold "
+                f"({config.RISKY_ROW_THRESHOLD} rows). This operation requires approval."
+            )
+            return self._approval_gate(reason, sql, call_id, session_id, _trace)
 
         if count > config.RISKY_ROW_THRESHOLD:
             reason = (
@@ -150,30 +170,16 @@ class SQLTool(Tool):
                 f"(threshold: {config.RISKY_ROW_THRESHOLD}). "
                 f"This bulk operation requires approval."
             )
-            if self.approval_handler is None:
-                return ToolResult(
-                    status="blocked",
-                    output=f"Approval required but no handler configured: {reason}",
-                    guardrail_verdict=VERDICT_REQUIRES_APPROVAL,
-                    approval_reason=reason,
-                )
-            if _trace:
-                _trace.log_approval_request(call_id, reason)
-            approved = self.approval_handler.request_approval(
-                call_id, session_id, reason, "sql_tool", {"sql": sql}
-            )
-            if _trace:
-                _trace.log_approval_decision(call_id, "approved" if approved else "denied")
-            if not approved:
-                return ToolResult(
-                    status="denied",
-                    output=f"Action denied by human: {reason}",
-                    guardrail_verdict=VERDICT_REQUIRES_APPROVAL,
-                    approval_reason=reason,
-                )
+            return self._approval_gate(reason, sql, call_id, session_id, _trace)
         return None
 
     def _estimate_affected_rows(self, sql):
+        """Best-effort row count for an UPDATE/DELETE's WHERE clause.
+
+        Returns the count, or ``None`` when it cannot be computed (parse
+        failure, missing table, count-query error). Callers treat ``None``
+        as fail-closed and require approval.
+        """
         try:
             parsed = sqlglot.parse_one(sql, read="sqlite")
 
