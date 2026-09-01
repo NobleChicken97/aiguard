@@ -9,7 +9,16 @@ class SupervisorAgent:
         self.research_worker = create_research_worker(llm_client=self.llm)
 
     def route(self, task: str) -> str:
-        """Route the task to the appropriate worker based on intent."""
+        """Route the task to the appropriate worker based on intent.
+
+        The routing model is asked to reply with a single token. Matching is
+        done on the first token, not a substring, so a reply like
+        "RESEARCH (not SQL)" cannot be flipped to the SQL worker by the
+        parenthetical. Unusable replies (empty text, or no text block at
+        all) default to the SQL worker: it is the more capable path, every
+        query it issues is guardrailed, and its only real loss is that
+        research questions are answered without web search.
+        """
         # Simple routing via LLM
         prompt = f"""You are a routing agent. You must decide if the user's task requires accessing the SQL database or if it is a general research/calculation task.
 Reply ONLY with 'SQL' or 'RESEARCH'. Do not explain.
@@ -20,10 +29,11 @@ Task: {task}
             system="You are a router. Reply only with 'SQL' or 'RESEARCH'.",
             messages=[{"role": "user", "content": prompt}]
         )
-        route_decision = response.text.strip().upper()
-        if "SQL" in route_decision:
-            return "SQLWorker"
-        return "ResearchWorker"
+        reply = (response.text or "").strip().upper()
+        first_token = reply.split()[0] if reply.split() else ""
+        if first_token.startswith("RESEARCH"):
+            return "ResearchWorker"
+        return "SQLWorker"
 
     def run(self, task: str, context: str = "", session_id=None, trace=None) -> str:
         worker_name = self.route(task)

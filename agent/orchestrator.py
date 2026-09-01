@@ -7,10 +7,7 @@ import config
 from agent.memory import ShortTermMemory, LongTermMemory, distill_facts_from_session
 from agent.trace import TraceLogger
 from agent.llm_client import ClaudeLLMClient
-from tools.base import ToolRegistry
-from tools.calculator import CalculatorTool
-from tools.web_search import WebSearchTool
-from tools.sql_tool import SQLTool
+from guardrails.pii_guardrail import PIIGuardrail
 
 
 def _now():
@@ -34,12 +31,13 @@ class Orchestrator:
     def __init__(
         self,
         llm_client=None,
-        tool_registry=None,
         approval_handler=None,
         user_id="default",
     ):
         self.llm = llm_client or ClaudeLLMClient()
-        self.tools = tool_registry or self._build_default_tools(approval_handler)
+        # Tools live on the supervisor's workers (SQLWorker / ResearchWorker),
+        # which build their own guarded registries — the orchestrator itself
+        # no longer executes tools.
         self.approval_handler = approval_handler
         self.user_id = user_id
         self.session_id = None
@@ -52,13 +50,6 @@ class Orchestrator:
         self._ltm_context = ""
         self._supervisor = None
         self._budget_client = None
-
-    def _build_default_tools(self, approval_handler):
-        registry = ToolRegistry()
-        registry.register(CalculatorTool())
-        registry.register(WebSearchTool())
-        registry.register(SQLTool(approval_handler=approval_handler))
-        return registry
 
     def start_session(self):
         from db.database import get_connection
@@ -218,37 +209,6 @@ class Orchestrator:
 
         return estimate_cost_usd(self.total_input_tokens, self.total_output_tokens)
 
-    def _execute_tool_call(self, tool_call):
-        tool = self.tools.get(tool_call.tool_name)
-        call_id = tool_call.tool_use_id
-
-        if tool is None:
-            self.trace.log_error(f"Unknown tool: {tool_call.tool_name}")
-            from tools.base import ToolResult
-            return ToolResult(
-                status="failed",
-                output=f"Error: Unknown tool '{tool_call.tool_name}'.",
-            )
-
-        self.trace.log_tool_call(
-            tool_call.tool_name,
-            tool_call.tool_input,
-            call_id,
-        )
-        self._persist_tool_call(call_id, tool_call.tool_name, tool_call.tool_input)
-
-        kwargs = dict(tool_call.tool_input) if tool_call.tool_input else {}
-        kwargs["_call_id"] = call_id
-        kwargs["_session_id"] = self.session_id
-        kwargs["_trace"] = self.trace
-
-        return self._retry_execute(tool, kwargs, call_id)
-
-    def _retry_execute(self, tool, kwargs, call_id):
-        from tools.base import execute_with_retry
-
-        return execute_with_retry(tool, kwargs, call_id, trace=self.trace)
-
     def _persist_message(self, role, content):
         from db.database import get_connection
 
@@ -262,16 +222,6 @@ class Orchestrator:
         finally:
             conn.close()
 
-    def _persist_assistant_message(self, response):
-        text = response.text or ""
-        if text:
-            self._persist_message("assistant", text)
-
-    def _persist_tool_call(self, call_id, tool_name, tool_input):
-        from db.database import record_tool_call
-
-        record_tool_call(self.session_id, call_id, tool_name, tool_input)
-
     def _end_session(self):
         from db.database import get_connection
 
@@ -282,7 +232,12 @@ class Orchestrator:
         })
 
         try:
-            facts = distill_facts_from_session(self.memory.get_messages())
+            facts = distill_facts_from_session(
+                self.memory.get_messages(), llm_client=self._budget_client
+            )
+            # Facts persist indefinitely and are injected into future system
+            # prompts, so they cross the same PII masking as query output.
+            facts = [PIIGuardrail.mask_pii(f) for f in facts]
             if facts:
                 self.long_term.save_facts(self.user_id, facts, self.session_id)
                 self.trace.log("facts_saved", {"count": len(facts), "facts": facts})
