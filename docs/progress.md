@@ -1,8 +1,8 @@
 # Project Progress Tracking
 
-**Overall Status**: ✅ Phases 1-9 COMPLETE · ✅ v1.6.0 Hardening · ✅ v1.6.1 Correctness & Safety Fixes · ✅ v1.6.2 Security & Auditability Tickets
+**Overall Status**: ✅ Phases 1-9 COMPLETE · ✅ v1.6.0 Hardening · ✅ v1.6.1 Correctness · ✅ v1.6.2 Security & Auditability · ✅ v1.6.3 Builder Analytics + Session Lifecycle
 
-> Last verified against code: September 1, 2026 — **145/145 tests passing without PostgreSQL** (8 PG-gated skip; 153 collected in total).
+> Last verified against code: September 1, 2026 — **167/167 tests passing without PostgreSQL** (8 PG-gated skip; 175 collected in total).
 
 ## Phase 1 — Orchestrator + Tools
 **Status:** ✅ Completed
@@ -136,6 +136,34 @@
   supervisor refactor).
 - **Test suite grew from 87 → 131 tests** (123 pass without PG,
   8 PG-gated, 1 deprecation warning).
+
+## v1.6.3 — Builder Analytics & Session Lifecycle (Sep 1, 2026)
+**Status:** ✅ Completed
+
+1. **Ticket 06 — Builder aggregates + GROUP BY**: aggregate mode
+   (`COUNT(*)`, `SUM/AVG/MIN/MAX` over validated numeric columns) with
+   optional group-by chips; plain columns are rejected in aggregate mode,
+   SUM/AVG is numeric-only, and order-by is restricted to group columns or
+   aggregate aliases. Filters stay bound parameters and every generated
+   statement still crosses `SQLGuardrail` + `PIIGuardrail`.
+2. **Ticket 07 — Builder FK joins**: "Join with" selector built exclusively
+   from *declared* foreign keys (SQLite `PRAGMA foreign_key_list`,
+   `information_schema` on PostgreSQL); every output column is aliased per
+   table (`orders_total`, `customers_name`, …) so duplicate names stay
+   unambiguous; joined-side results are PII-masked; undeclared joins are
+   refused.
+3. **Ticket 09 — Session lifecycle (idle-window model)**: turns no longer
+   end the session row. `app_sessions.last_active_at` (ALTER TABLE
+   migration + `started_at` backfill for pre-1.6.3 databases) is stamped on
+   every turn; the dashboard's active-session stat counts sessions with
+   activity inside `SESSION_IDLE_MINUTES` (default 15, env-configurable).
+   `session_end` remains a trace event. Decision + alternatives recorded in
+   `docs/design.md`.
+4. **Ticket board**: `.scratch/netsentry-vnext/issues/` — 04, 05, 06, 07,
+   08, 09 done. Remaining: 01 (needs an API key), 02/03 (need a GitHub
+   remote), 10 (needs a key for accuracy measurement).
+
+Test suite: 153 → 175 tests (167 pass without PG, 8 PG-gated).
 
 ## v1.6.2 — Security & Auditability Tickets (Sep 1, 2026)
 **Status:** ✅ Completed

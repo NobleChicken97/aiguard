@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done (v1.6.3)
 
-- [ ] Aggregate + group-by SELECTs execute through the builder with correct results
-- [ ] Invalid combos (aggregate over non-numeric column, unknown group column) fail with operator-friendly 400s
-- [ ] The always-guardrail invariant holds for every generated statement (existing invariant test extended)
-- [ ] New tests mirror the existing builder suite's coverage style
+- [x] Aggregate + group-by SELECTs execute through the builder with correct results
+- [x] Invalid combos (aggregate over non-numeric column, unknown group column) fail with operator-friendly 400s
+- [x] The always-guardrail invariant holds for every generated statement (existing invariant test extended)
+- [x] New tests mirror the existing builder suite's coverage style

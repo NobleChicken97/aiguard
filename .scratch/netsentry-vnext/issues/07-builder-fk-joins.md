@@ -4,9 +4,9 @@
 
 **Blocked by:** 06 (GROUP BY / aggregates) — both rework the same SQL-assembly contract; sequencing keeps those diffs clean.
 
-**Status:** ready-for-agent
+**Status:** done (v1.6.3)
 
-- [ ] A two-table join via a declared FK executes with correct joined rows
-- [ ] Columns from both sides validate against their own table's schema
-- [ ] Tables with no declared FK relationship cannot be joined (clear error)
-- [ ] Guardrail + PII invariant tests extended to the join path
+- [x] A two-table join via a declared FK executes with correct joined rows
+- [x] Columns from both sides validate against their own table's schema
+- [x] Tables with no declared FK relationship cannot be joined (clear error)
+- [x] Guardrail + PII invariant tests extended to the join path

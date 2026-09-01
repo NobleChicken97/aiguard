@@ -73,9 +73,10 @@ The supervisor refactor left the following regressions vs documented behavior:
   8 PG-gated).
 
 ## Next Up (recommended order)
-Tracked as tracer-bullet tickets in `.scratch/netsentry-vnext/issues/` (dependency-ordered; see ticket files for acceptance criteria). **Done in v1.6.2:** 04 (approval CSRF), 05 (memory fact deletion), 08 (builder audit rows). Remaining frontier:
-1. **01** Live-API smoke harness (needs an `ANTHROPIC_API_KEY`) · **02** Publish repo to GitHub + activate CI (needs the remote) → gates **03** Redis-in-CI
-2. **06** Builder GROUP BY/aggregates → **07** Builder FK joins (sequenced on the same SQL-assembly contract)
-3. **09** Session lifecycle semantics · **10** Supervisor routing spike
+Tracked as tracer-bullet tickets in `.scratch/netsentry-vnext/issues/` (dependency-ordered; see ticket files for acceptance criteria). **Done:** 04 (approval CSRF), 05 (memory fact deletion), 06 (builder aggregates/GROUP BY), 07 (builder FK joins), 08 (builder audit rows), 09 (session lifecycle) — all in v1.6.2/v1.6.3. Remaining frontier:
+1. **01** Live-API smoke harness — **needs an `ANTHROPIC_API_KEY`** (none configured; no `.env` exists)
+2. **02** Publish repo to GitHub + activate CI — **needs the owner to create the repo/remote** → gates **03** Redis-in-CI
+3. **10** Supervisor routing spike — LLM-vs-keyword accuracy measurement **needs a key**; the deterministic prefilter could be built without it if decided
+
 
 

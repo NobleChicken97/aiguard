@@ -244,7 +244,7 @@ The system includes a full FastAPI-based web interface:
 |----------|-------------|
 | `/chat` | Interactive chat interface |
 | `/dashboard` | Real-time monitoring dashboard (live stats via SSE) |
-| `/query-builder` | Visual SELECT builder — guardrailed fallback when the agent struggles with complex schemas |
+| `/query-builder` | Visual SELECT builder with filters, aggregates/GROUP BY, and declared-FK joins — guardrailed fallback when the agent struggles with complex schemas |
 | `/approval-queue` | Pending approvals management |
 | `/traces` | Trace replay & session inspection |
 | `/memory-inspector` | Long-term memory view |
@@ -330,6 +330,7 @@ WORKER_MAX_ITERATIONS=5
 RISKY_ROW_THRESHOLD=5
 SESSION_COST_BUDGET_USD=0.50
 SESSION_MAX_TOKENS=8192
+SESSION_IDLE_MINUTES=15      # dashboard "active" = activity within this window
 
 # Webapp hardening
 SQL_QUERY_CACHE_SIZE=128    # bounded LRU for repeated SELECTs (0 disables)
@@ -454,7 +455,7 @@ def check(self, sql):
 | Design | `docs/design.md` | Technical design and trade-offs |
 | Build Plan | `docs/plan.md` | Phased build plan and MVP cut line |
 | Deployment | `docs/DEPLOYMENT.md` | Docker, Render, Railway, AWS deployment |
-| Test Results | `docs/report.md` | 153-test suite, 100% adversarial block rate |
+| Test Results | `docs/report.md` | 175-test suite, 100% adversarial block rate |
 | API | `webapp.py` | FastAPI endpoints and templates |
 | Config | `config.py` | Application configuration |
 | Tests | `tests/` | Adversarial test suites (17 prompts) |

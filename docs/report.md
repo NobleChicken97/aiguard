@@ -94,7 +94,8 @@ The project test suite covers all safety, resilience, and integration paths:
 | Supervisor routing (v1.6.1) | 4 tests | 100% |
 | Memory distillation & PII masking (v1.6.1) | 4 tests | 100% |
 | Fact deletion, approval CSRF, builder audit (v1.6.2) | 6 tests | 100% |
-| **Total** | **153 tests** | **100% (145 without PG)** |
+| Builder aggregates, FK joins, session lifecycle (v1.6.3) | 22 tests | 100% |
+| **Total** | **175 tests** | **100% (167 without PG)** |
 
 ### Adversarial guardrail effectiveness
 
@@ -123,6 +124,14 @@ All 22 destructive SQL attempts across 17 adversarial prompts are blocked before
 
 ### Version history
 
+- **v1.6.3** (Sep 2026) — Builder analytics + session lifecycle:
+  - Visual builder gains aggregates (`COUNT/SUM/AVG/MIN/MAX`), group-by,
+    and FK-based joins built only from declared foreign keys; outputs are
+    aliased per table and every statement still crosses guardrail + PII
+  - Session lifecycle switched to an idle-window model: sessions keep
+    `last_active_at` (auto-migrated), the dashboard's active count is
+    meaningful, and finished turns no longer mark rows "ended"
+  - Test suite: 153 → 175 (167 pass without PG, 8 PG-gated)
 - **v1.6.2** (Sep 2026) — Security & auditability tickets (from `.scratch/netsentry-vnext/issues/`):
   - `DELETE /api/users/{user_id}/memory/{fact_id}` + inspector delete
     control (ticket 05); delete is user-scoped and 404s cross-user ids

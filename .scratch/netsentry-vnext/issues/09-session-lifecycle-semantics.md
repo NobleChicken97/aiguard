@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done (v1.6.3) — idle-window model chosen
 
-- [ ] The dashboard's active-session count reflects reality during and shortly after a conversation
-- [ ] Resuming a session never leaves contradictory status states
-- [ ] Chosen lifecycle model documented alongside the existing design trade-offs
-- [ ] Tests cover the new status transitions
+- [x] The dashboard's active-session count reflects reality during and shortly after a conversation
+- [x] Resuming a session never leaves contradictory status states
+- [x] Chosen lifecycle model documented alongside the existing design trade-offs
+- [x] Tests cover the new status transitions

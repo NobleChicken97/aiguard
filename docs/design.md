@@ -146,6 +146,15 @@ Alternatives:
 
 Why this won: the project intentionally treats data minimization as part of the safety contract. Guardrails protect the database, and output filtering helps protect user privacy.
 
+### 8) Chosen: idle-window session lifecycle (v1.6.3)
+What was chosen: a session row stays `active` for its whole life; "active right now" is derived from a `last_active_at` timestamp (stamped on every turn) falling inside `SESSION_IDLE_MINUTES` (default 15). Legacy databases are migrated in place with a `started_at` backfill.
+
+Alternatives:
+- End the session after every agent turn (the original behavior) — the dashboard's active-session stat read ~zero and resuming silently reopened an "ended" row.
+- End only on explicit close — there is no close signal in a web chat, so sessions would never actually end.
+
+Why this won: the dashboard stat reflects reality during and shortly after a conversation, resume is never contradictory, and stale rows age out of the active count without a cleanup job. `session_end` remains a trace event marking the end of a turn, not a row state.
+
 ## Known limitations and deferred hardening
 - The policy engine is intentionally conservative and schema-specific; it is not a generic SQL security product.
 - The project does not attempt deep semantic validation of every business rule; it focuses on execution boundaries and explicit approvals.
