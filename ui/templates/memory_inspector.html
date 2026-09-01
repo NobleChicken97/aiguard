@@ -75,9 +75,29 @@
           <p style="margin: 0 0 0.6rem;">${escapeHtml(fact.fact_text)}</p>
           <div class="row" style="justify-content: space-between; align-items: center;">
             <span class="badge good">${new Date(fact.created_at).toLocaleString()}</span>
-            <span class="muted">Session: ${escapeHtml(fact.source_session_id || 'unknown')}</span>
+            <span class="row" style="align-items: center;">
+              <span class="muted">Session: ${escapeHtml(fact.source_session_id || 'unknown')}</span>
+              <button class="button deny fact-delete" data-fact-id="${escapeHtml(fact.fact_id)}"
+                      aria-label="Delete fact" style="padding: 0.35rem 0.7rem;">Delete</button>
+            </span>
           </div>
         `;
+        item.querySelector('.fact-delete').addEventListener('click', async () => {
+          if (!confirm('Delete this fact? Future sessions will no longer see it.')) return;
+          try {
+            const del = await fetch('/api/users/' + encodeURIComponent(userId) + '/memory/' +
+                                    encodeURIComponent(fact.fact_id), { method: 'DELETE' });
+            if (del.ok) {
+              item.remove();
+              const countEl = document.getElementById('fact-count');
+              countEl.textContent = Math.max(0, parseInt(countEl.textContent, 10) - 1);
+            } else {
+              alert('Could not delete fact (' + del.status + ').');
+            }
+          } catch (err) {
+            alert('Network error: ' + err.message);
+          }
+        });
         list.appendChild(item);
       });
     } catch (err) {

@@ -108,9 +108,21 @@ class LongTermMemory:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def delete_fact(self, fact_id):
-        self.conn.execute("DELETE FROM app_memory_facts WHERE fact_id = ?", (fact_id,))
+    def delete_fact(self, fact_id, user_id=None):
+        """Delete a fact by id; returns True when a row was actually deleted.
+
+        When ``user_id`` is given the delete is scoped to that user's facts,
+        so a valid fact id belonging to someone else resolves to False
+        rather than deleting across users.
+        """
+        sql = "DELETE FROM app_memory_facts WHERE fact_id = ?"
+        params = [fact_id]
+        if user_id is not None:
+            sql += " AND user_id = ?"
+            params.append(user_id)
+        cursor = self.conn.execute(sql, tuple(params))
         self.conn.commit()
+        return (cursor.rowcount or 0) > 0
 
     def close(self):
         if self._conn:

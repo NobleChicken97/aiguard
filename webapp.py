@@ -458,6 +458,23 @@ def user_memory_api(user_id: str):
         ltm.close()
 
 
+@app.delete("/api/users/{user_id}/memory/{fact_id}")
+def delete_user_fact(user_id: str, fact_id: str):
+    """Delete one long-term fact so future sessions stop injecting it.
+
+    Scoped to ``user_id`` on purpose: a fact id belonging to a different
+    user resolves to 404 instead of deleting across users.
+    """
+    ltm = LongTermMemory()
+    try:
+        deleted = ltm.delete_fact(fact_id, user_id=user_id)
+    finally:
+        ltm.close()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Fact not found for this user.")
+    return JSONResponse({"deleted": fact_id, "user_id": user_id})
+
+
 @app.get("/approval-queue", response_class=HTMLResponse)
 def approval_queue(request: Request):
     return templates.TemplateResponse(
