@@ -17,6 +17,10 @@ RISKY_ROW_THRESHOLD = int(os.getenv("RISKY_ROW_THRESHOLD", "5"))
 
 SESSION_COST_BUDGET_USD = float(os.getenv("SESSION_COST_BUDGET_USD", "0"))
 
+# A session counts as "active" (dashboard stat) while it had activity within
+# this many minutes; it is never marked ended just because a turn finished.
+SESSION_IDLE_MINUTES = int(os.getenv("SESSION_IDLE_MINUTES", "15"))
+
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 ALLOWED_TABLES = {"customers", "products", "orders", "order_items"}

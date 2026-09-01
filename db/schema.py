@@ -1,9 +1,10 @@
 APP_SCHEMA = """
 CREATE TABLE IF NOT EXISTS app_sessions (
-    session_id   TEXT PRIMARY KEY,
-    user_id      TEXT NOT NULL,
-    started_at   TEXT NOT NULL,
-    status       TEXT NOT NULL DEFAULT 'active'
+    session_id     TEXT PRIMARY KEY,
+    user_id        TEXT NOT NULL,
+    started_at     TEXT NOT NULL,
+    status         TEXT NOT NULL DEFAULT 'active',
+    last_active_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS app_messages (

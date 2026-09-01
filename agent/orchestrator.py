@@ -58,8 +58,9 @@ class Orchestrator:
         conn = get_connection()
         try:
             conn.execute(
-                "INSERT INTO app_sessions (session_id, user_id, started_at, status) VALUES (?, ?, ?, ?)",
-                (self.session_id, self.user_id, _now(), "active"),
+                """INSERT INTO app_sessions (session_id, user_id, started_at, status, last_active_at)
+                   VALUES (?, ?, ?, 'active', ?)""",
+                (self.session_id, self.user_id, _now(), _now()),
             )
             conn.commit()
         finally:
@@ -153,6 +154,22 @@ class Orchestrator:
         if self.session_id is None:
             self.start_session()
 
+        # Touch the session's activity timestamp: a session counts as
+        # "active" (dashboard stat) while turns keep landing within the
+        # configured idle window, regardless of how long the conversation
+        # has existed.
+        from db.database import get_connection
+
+        conn = get_connection()
+        try:
+            conn.execute(
+                "UPDATE app_sessions SET last_active_at = ? WHERE session_id = ?",
+                (_now(), self.session_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
         self.memory.add_user_message(user_message)
         self._persist_message("user", user_message)
         self.trace.log("user_message", {"content": user_message})
@@ -244,16 +261,10 @@ class Orchestrator:
         except Exception as e:
             self.trace.log_error(f"Failed to save long-term memory: {e}")
 
-        conn = get_connection()
-        try:
-            conn.execute(
-                "UPDATE app_sessions SET status = ? WHERE session_id = ?",
-                ("ended", self.session_id),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-
+        # Status stays 'active' on purpose: active-ness is derived from
+        # last_active_at vs the idle window (SESSION_IDLE_MINUTES), not
+        # from a row flag flipped at the end of every turn. The
+        # session_end trace event above marks the end of this run().
         self.long_term.close()
         self.trace.close()
 

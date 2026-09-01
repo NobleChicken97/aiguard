@@ -2,7 +2,7 @@ import asyncio
 import json
 import secrets
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
@@ -118,12 +118,20 @@ def _compute_stats():
     try:
         conn = get_connection()
         try:
-            def _count(sql):
-                return conn.execute(sql).fetchone()["cnt"]
+            def _count(sql, params=()):
+                return conn.execute(sql, params).fetchone()["cnt"]
 
             sessions = _count("SELECT COUNT(*) AS cnt FROM app_sessions")
+            # "Active" = activity within the idle window (status stays
+            # 'active' for the life of the session row).
+            idle_cutoff = (
+                datetime.now(timezone.utc)
+                - timedelta(minutes=config.SESSION_IDLE_MINUTES)
+            ).isoformat()
             active_sessions = _count(
-                "SELECT COUNT(*) AS cnt FROM app_sessions WHERE status = 'active'"
+                """SELECT COUNT(*) AS cnt FROM app_sessions
+                   WHERE status = 'active' AND last_active_at >= ?""",
+                (idle_cutoff,),
             )
             messages = _count("SELECT COUNT(*) AS cnt FROM app_messages")
             tool_calls = _count("SELECT COUNT(*) AS cnt FROM app_tool_calls")

@@ -8,6 +8,29 @@ _pg_pool = None
 def _is_postgres():
     return config.DATABASE_URL.startswith("postgres")
 
+def _ensure_session_activity_column(conn):
+    """Migrate pre-v1.6.3 databases: add app_sessions.last_active_at.
+
+    CREATE TABLE IF NOT EXISTS cannot add a column to a table that already
+    exists, so the column is checked and ALTERed in when missing; legacy
+    rows are backfilled from started_at so they age out of the active
+    window instead of disappearing from queries that expect the column.
+    """
+    if _is_postgres():
+        row = conn.execute(
+            """SELECT 1 AS ok FROM information_schema.columns
+               WHERE table_name = 'app_sessions' AND column_name = 'last_active_at'"""
+        ).fetchone()
+        if row is None:
+            conn.execute("ALTER TABLE app_sessions ADD COLUMN last_active_at TEXT")
+    else:
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(app_sessions)").fetchall()}
+        if "last_active_at" not in cols:
+            conn.execute("ALTER TABLE app_sessions ADD COLUMN last_active_at TEXT")
+    conn.execute(
+        "UPDATE app_sessions SET last_active_at = started_at WHERE last_active_at IS NULL"
+    )
+
 def _init_pg_pool():
     global _pg_pool
     if _pg_pool is None and _is_postgres():
@@ -90,6 +113,7 @@ def initialize_db():
         try:
             conn.executescript(app_schema_pg)
             conn.executescript(demo_schema_pg)
+            _ensure_session_activity_column(conn)
             conn.commit()
         finally:
             conn.close()
@@ -98,6 +122,7 @@ def initialize_db():
         try:
             conn.executescript(APP_SCHEMA)
             conn.executescript(DEMO_SCHEMA)
+            _ensure_session_activity_column(conn)
             conn.commit()
         finally:
             conn.close()
