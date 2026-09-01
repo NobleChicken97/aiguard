@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Monitoring Dashboard — Agentic Guardrails{% endblock %}
+{% block content %}
+<div class="hero">
+  <div>
+    <h1>System Dashboard</h1>
+    <p>Live view of sessions, tool usage, and guardrail decisions. Updates automatically every few seconds via Server-Sent Events.</p>
+  </div>
+  <div class="stats">
+    <div class="label">Connection</div>
+    <div class="value" id="stat-connection"><span class="badge warn">connecting…</span></div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 1rem;">
+  <div class="card"><div class="card-body" style="text-align:center;">
+    <div class="muted" style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.12em;">Sessions</div>
+    <div style="font-size:2.2rem;font-weight:800;" id="stat-sessions">–</div>
+    <div class="muted" id="stat-active">active: –</div>
+  </div></div>
+  <div class="card"><div class="card-body" style="text-align:center;">
+    <div class="muted" style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.12em;">Messages</div>
+    <div style="font-size:2.2rem;font-weight:800;" id="stat-messages">–</div>
+    <div class="muted">all sessions</div>
+  </div></div>
+  <div class="card"><div class="card-body" style="text-align:center;">
+    <div class="muted" style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.12em;">Tool Calls</div>
+    <div style="font-size:2.2rem;font-weight:800;" id="stat-toolcalls">–</div>
+    <div class="muted" id="stat-tools-top">—</div>
+  </div></div>
+  <div class="card"><div class="card-body" style="text-align:center;">
+    <div class="muted" style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.12em;">Pending Approvals</div>
+    <div style="font-size:2.2rem;font-weight:800;" id="stat-approvals">–</div>
+    <div class="muted"><a href="/approval-queue">review queue →</a></div>
+  </div></div>
+</div>
+
+<div class="grid" style="grid-template-columns: 1fr 1fr; align-items:start;">
+  <div class="stack">
+    <div class="card">
+      <div class="card-header"><h2>Guardrail Verdicts <span class="muted">(recent 500)</span></h2></div>
+      <div class="card-body row" id="guardrail-badges">
+        <span class="badge good">ALLOWED: –</span>
+        <span class="badge bad">BLOCKED: –</span>
+        <span class="badge warn">APPROVAL: –</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>Tool Usage</h2></div>
+      <div class="card-body">
+        <table style="width:100%;border-collapse:collapse;" id="tools-table">
+          <thead><tr class="muted" style="text-align:left;">
+            <th style="padding:0.4rem 0;">Tool</th><th>Calls</th>
+          </tr></thead>
+          <tbody id="tools-rows"><tr><td colspan="2" class="muted">no data yet</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2>Recent Sessions</h2></div>
+    <div class="card-body section-list" id="sessions-list">
+      <span class="muted">loading…</span>
+    </div>
+  </div>
+</div>
+
+<script>
+function esc(s) {
+  const d = document.createElement("div");
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function render(stats) {
+  document.getElementById("stat-sessions").textContent = stats.sessions;
+  document.getElementById("stat-active").textContent = "active: " + stats.active_sessions;
+  document.getElementById("stat-messages").textContent = stats.messages;
+  document.getElementById("stat-toolcalls").textContent = stats.tool_calls;
+
+  const tools = Object.entries(stats.tools || {});
+  document.getElementById("stat-tools-top").textContent =
+    tools.length ? ("top: " + tools[0][0]) : "none yet";
+
+  document.getElementById("stat-approvals").textContent = stats.pending_approvals;
+  document.getElementById("stat-approvals").style.color =
+    stats.pending_approvals > 0 ? "var(--accent-2)" : "";
+
+  const conn = document.getElementById("stat-connection");
+  conn.innerHTML = stats.db_connected
+    ? '<span class="badge good">healthy</span>'
+    : '<span class="badge bad">db offline</span>';
+
+  const g = stats.guardrail || {};
+  document.getElementById("guardrail-badges").innerHTML =
+    '<span class="badge good">ALLOWED: ' + (g.allowed_recent ?? 0) + '</span>' +
+    '<span class="badge bad">BLOCKED: ' + (g.blocked_recent ?? 0) + '</span>' +
+    '<span class="badge warn">APPROVAL: ' + (g.approval_required_recent ?? 0) + '</span>';
+
+  const tbody = document.getElementById("tools-rows");
+  tbody.innerHTML = tools.length
+    ? tools.map(([name, count]) =>
+        "<tr><td style='padding:0.45rem 0;'>" + esc(name) + "</td><td>" + count + "</td></tr>"
+      ).join("")
+    : "<tr><td colspan='2' class='muted'>no data yet</td></tr>";
+
+  const list = document.getElementById("sessions-list");
+  const sessions = stats.recent_sessions || [];
+  list.innerHTML = sessions.length
+    ? sessions.map(s =>
+        "<a class='session-link' href='/traces/" + encodeURIComponent(s.session_id) + "'>" +
+          "<strong>" + esc(s.user_id) + "</strong> " +
+          "<span class='muted'>· " + esc(s.status) + " · " + s.event_count + " events</span><br>" +
+          "<span class='muted' style='font-size:0.85rem;'>" + esc(s.started_at) + "</span>" +
+        "</a>"
+      ).join("")
+    : "<span class='muted'>no sessions yet</span>";
+}
+
+let pollTimer = null;
+const source = new EventSource("/api/stream");
+source.onmessage = (e) => {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  render(JSON.parse(e.data));
+};
+source.onerror = () => {
+  // Fallback to polling if SSE is blocked (e.g. by a proxy)
+  if (!pollTimer) {
+    source.close();
+    pollTimer = setInterval(async () => {
+      try {
+        const res = await fetch("/api/stats");
+        render(await res.json());
+      } catch (_) { /* keep retrying */ }
+    }, 3000);
+  }
+};
+</script>
+{% endblock %}

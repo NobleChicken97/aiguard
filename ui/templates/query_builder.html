@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}Query Builder — Agentic Guardrails{% endblock %}
+{% block content %}
+<div class="hero">
+  <div>
+    <h1>Query Builder</h1>
+    <p>Visual fallback for when the agent struggles with a complex schema question.
+       Assemble a SELECT by hand — it runs through the same guardrail layer as agent queries.</p>
+  </div>
+  <div class="stats">
+    <div class="label">Mode</div>
+    <div class="value" style="font-size:1rem;"><span class="badge warn">SELECT only</span></div>
+    <div class="muted">read-only · guardrailed</div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns: 1.2fr 1fr; align-items:start;">
+  <article class="card">
+    <div class="card-header">
+      <h2>Build Query</h2>
+      <span class="badge good" id="schema-badge">loading schema…</span>
+    </div>
+    <div class="card-body stack">
+      <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Table</label>
+      <select id="qb-table" class="qb-input"></select>
+
+      <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Columns <span style="text-transform:none;letter-spacing:0;">(none checked = all)</span></label>
+      <div id="qb-columns" class="row"></div>
+
+      <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;">Filters</label>
+      <div id="qb-filters" class="stack"></div>
+      <div class="row">
+        <button type="button" class="button secondary" id="add-filter">+ Add filter</button>
+      </div>
+
+      <div class="row">
+        <span>
+          <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;display:block;">Order by</label>
+          <select id="qb-order" class="qb-input"><option value="">(none)</option></select>
+        </span>
+        <span>
+          <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;display:block;">Direction</label>
+          <select id="qb-dir" class="qb-input"><option>ASC</option><option>DESC</option></select>
+        </span>
+        <span>
+          <label class="muted" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.12em;display:block;">Limit (1–200)</label>
+          <input id="qb-limit" type="number" min="1" max="200" value="50" class="qb-input" style="width:7rem;">
+        </span>
+      </div>
+
+      <div class="row">
+        <button type="button" class="button approve" id="run-button">Run query</button>
+      </div>
+    </div>
+  </article>
+
+  <div class="stack">
+    <article class="card">
+      <div class="card-header">
+        <h2>Generated SQL</h2>
+        <span id="verdict-slot"></span>
+      </div>
+      <div class="card-body">
+        <pre id="sql-preview">—</pre>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-header">
+        <h2>Results</h2>
+        <span class="muted" id="result-meta"></span>
+      </div>
+      <div class="card-body" id="results-body">
+        <p class="muted" style="margin:0;">Build a query and press “Run query”.</p>
+      </div>
+    </article>
+  </div>
+</div>
+
+<style>
+  .qb-input {
+    background: rgba(2, 6, 23, 0.7);
+    border: 1px solid var(--panel-border);
+    border-radius: 0.7rem;
+    padding: 0.6rem 0.75rem;
+    color: var(--text);
+    font: inherit;
+    min-width: 9rem;
+  }
+  .qb-col-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .qb-filter-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+  #results-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; display: block; overflow-x: auto; }
+  #results-table th, #results-table td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid rgba(148, 163, 184, 0.12); white-space: nowrap; }
+</style>
+
+<script>
+const schemaState = { tables: [], operators: [] };
+
+function esc(s) {
+  const d = document.createElement("div");
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+async function loadSchema() {
+  const res = await fetch("/api/query-builder/schema");
+  const data = await res.json();
+  schemaState.tables = data.tables || [];
+  schemaState.operators = data.operators || ["=", "!=", ">", ">=", "<", "<=", "LIKE"];
+
+  const tableSel = document.getElementById("qb-table");
+  tableSel.innerHTML = schemaState.tables.map(t =>
+    '<option value="' + esc(t.name) + '">' + esc(t.name) + "</option>").join("");
+  document.getElementById("schema-badge").outerHTML =
+    '<span class="badge good" id="schema-badge">schema loaded</span>';
+  onTableChange();
+}
+
+function currentTableMeta() {
+  return schemaState.tables.find(t => t.name === document.getElementById("qb-table").value);
+}
+
+function onTableChange() {
+  const meta = currentTableMeta();
+  const cols = meta ? meta.columns : [];
+
+  const colBox = document.getElementById("qb-columns");
+  colBox.innerHTML = cols.map(c =>
+    '<label class="qb-col-chip"><input type="checkbox" value="' + esc(c.name) + '"> ' +
+    esc(c.name) + ' <span class="muted">' + esc(c.type || "?") + "</span></label>").join("");
+
+  const orderSel = document.getElementById("qb-order");
+  orderSel.innerHTML = '<option value="">(none)</option>' + cols.map(c =>
+    '<option value="' + esc(c.name) + '">' + esc(c.name) + "</option>").join("");
+
+  document.getElementById("qb-filters").innerHTML = "";
+  addFilterRow();
+}
+
+function addFilterRow() {
+  const meta = currentTableMeta();
+  const cols = meta ? meta.columns : [];
+  const wrap = document.createElement("div");
+  wrap.className = "qb-filter-row";
+  wrap.innerHTML =
+    '<select class="qb-input qb-f-col">' + cols.map(c =>
+      '<option value="' + esc(c.name) + '">' + esc(c.name) + "</option>").join("") + "</select>" +
+    '<select class="qb-input qb-f-op">' + schemaState.operators.map(op =>
+      "<option>" + esc(op) + "</option>").join("") + "</select>" +
+    '<input class="qb-input qb-f-val" placeholder="value" style="flex:1;min-width:6rem;">' +
+    '<button type="button" class="button deny qb-f-del" title="remove">×</button>';
+  wrap.querySelector(".qb-f-del").addEventListener("click", () => wrap.remove());
+  document.getElementById("qb-filters").appendChild(wrap);
+}
+
+function collectSpec() {
+  const table = document.getElementById("qb-table").value;
+  const columns = Array.from(
+    document.querySelectorAll("#qb-columns input:checked")).map(cb => cb.value);
+  const filters = Array.from(document.querySelectorAll(".qb-filter-row")).map(row => ({
+    column: row.querySelector(".qb-f-col").value,
+    operator: row.querySelector(".qb-f-op").value,
+    value: row.querySelector(".qb-f-val").value,
+  })).filter(f => f.value.trim() !== "");
+  return {
+    table,
+    columns,
+    filters,
+    order_by: document.getElementById("qb-order").value || null,
+    order_dir: document.getElementById("qb-dir").value,
+    limit: parseInt(document.getElementById("qb-limit").value, 10) || 50,
+  };
+}
+
+function setVerdict(verdict) {
+  const slot = document.getElementById("verdict-slot");
+  if (!verdict) { slot.innerHTML = ""; return; }
+  const cls = verdict === "ALLOWED" ? "good" : (verdict === "BLOCKED" ? "bad" : "warn");
+  slot.innerHTML = '<span class="badge ' + cls + '">' + esc(verdict) + "</span>";
+}
+
+function renderError(message) {
+  document.getElementById("sql-preview").textContent = "—";
+  setVerdict(null);
+  document.getElementById("result-meta").textContent = "";
+  document.getElementById("results-body").innerHTML =
+    '<p style="margin:0;color:var(--danger);">' + esc(message) + "</p>";
+}
+
+function renderResult(data) {
+  document.getElementById("sql-preview").textContent = data.sql;
+  setVerdict(data.guardrail ? data.guardrail.verdict : null);
+  document.getElementById("result-meta").textContent =
+    data.row_count + " rows · " + data.elapsed_ms + " ms";
+
+  const body = document.getElementById("results-body");
+  if (!data.rows.length) {
+    body.innerHTML = '<p class="muted" style="margin:0;">Query returned 0 rows.</p>';
+    return;
+  }
+  const head = data.columns.map(c => "<th>" + esc(c) + "</th>").join("");
+  const rows = data.rows.map(r =>
+    "<tr>" + r.map(cell => "<td>" + esc(cell) + "</td>").join("") + "</tr>").join("");
+  body.innerHTML = '<table id="results-table"><thead><tr>' + head +
+    "</tr></thead><tbody>" + rows + "</tbody></table>";
+}
+
+document.getElementById("run-button").addEventListener("click", async () => {
+  const spec = collectSpec();
+  document.getElementById("run-button").disabled = true;
+  try {
+    const res = await fetch("/api/query-builder/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(spec),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      renderError(err.detail || "Request failed (" + res.status + ").");
+      return;
+    }
+    renderResult(await res.json());
+  } catch (e) {
+    renderError("Network error: " + e.message);
+  } finally {
+    document.getElementById("run-button").disabled = false;
+  }
+});
+
+document.getElementById("add-filter").addEventListener("click", addFilterRow);
+document.getElementById("qb-table").addEventListener("change", onTableChange);
+
+loadSchema();
+</script>
+{% endblock %}

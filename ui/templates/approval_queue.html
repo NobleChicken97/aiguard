@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Approval Queue{% endblock %}
+{% block content %}
+<section class="hero">
+  <div>
+    <h1>Approval Queue</h1>
+    <p>High-impact actions pause here until a human explicitly approves or denies them.</p>
+  </div>
+  <div class="stats">
+    <div class="label">Pending</div>
+    <div class="value">{{ pending_approvals|length }}</div>
+    <div class="muted">Active sessions: {{ session_count }}</div>
+  </div>
+</section>
+
+<section class="grid">
+  <article class="card">
+    <div class="card-header">
+      <h2>Pending actions</h2>
+      <span class="badge warn">Review required</span>
+    </div>
+    <div class="card-body">
+      {% if pending_approvals %}
+      <div class="stack">
+        {% for item in pending_approvals %}
+        <div class="approval">
+          <div class="approval-top">
+            <div>
+              <div class="badge warn">{{ item.tool_name }}</div>
+              <div class="muted" style="margin-top: 0.45rem;">{{ item.approval_id }}</div>
+            </div>
+            <div class="muted">{{ item.created_at }}</div>
+          </div>
+          <p style="margin: 0 0 0.75rem;">{{ item.risk_reason }}</p>
+          <pre>{{ item.input_display }}</pre>
+          <div class="row" style="margin-top: 0.8rem;">
+            <form action="/approvals/{{ item.approval_id }}/approve" method="post">
+              <button class="button approve" type="submit">Approve</button>
+            </form>
+            <form action="/approvals/{{ item.approval_id }}/deny" method="post">
+              <button class="button deny" type="submit">Deny</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="approval">
+        <div class="badge good">Clear</div>
+        <p style="margin-bottom: 0;">There are no pending approvals right now.</p>
+      </div>
+      {% endif %}
+    </div>
+  </article>
+
+  <article class="card">
+    <div class="card-header">
+      <h2>Workflow map</h2>
+      <span class="badge good">Live</span>
+    </div>
+    <div class="card-body">
+      <div class="section-list">
+        <div class="approval">
+          <strong>1. Guardrail check</strong>
+          <p class="muted" style="margin-bottom: 0;">SQL is parsed before it can reach the database.</p>
+        </div>
+        <div class="approval">
+          <strong>2. Human review</strong>
+          <p class="muted" style="margin-bottom: 0;">Risky operations wait for an approval decision here.</p>
+        </div>
+        <div class="approval">
+          <strong>3. Trace replay</strong>
+          <p class="muted" style="margin-bottom: 0;"><a href="/traces">Open the session trace replay page</a>.</p>
+        </div>
+      </div>
+    </div>
+  </article>
+</section>
+{% endblock %}

@@ -1,0 +1,262 @@
+import sqlglot
+from collections import OrderedDict
+import threading
+
+from tools.base import Tool, ToolResult
+from guardrails.sql_guardrail import SQLGuardrail, VERDICT_BLOCKED, VERDICT_REQUIRES_APPROVAL, VERDICT_ALLOWED
+from guardrails.pii_guardrail import PIIGuardrail
+from db.database import get_connection
+import config
+
+
+class _ThreadSafeLRUCache:
+    """Bounded LRU cache. Thread-safe via a single lock.
+
+    Used to short-circuit repeated identical SELECTs inside a long-running
+    session. Cleared on any successful write so we never return stale rows
+    after an INSERT/UPDATE/DELETE. When ``max_size`` is 0, the cache is
+    disabled (all operations are no-ops).
+    """
+
+    def __init__(self, max_size):
+        self._max_size = max(0, int(max_size))
+        self._data = OrderedDict()
+        self._lock = threading.Lock()
+
+    def get(self, key):
+        if self._max_size == 0 or key is None:
+            return None
+        with self._lock:
+            if key in self._data:
+                self._data.move_to_end(key)
+                return self._data[key]
+        return None
+
+    def set(self, key, value):
+        if self._max_size == 0 or key is None:
+            return
+        with self._lock:
+            if key in self._data:
+                self._data.move_to_end(key)
+            self._data[key] = value
+            while len(self._data) > self._max_size:
+                self._data.popitem(last=False)
+
+    def clear(self):
+        with self._lock:
+            self._data.clear()
+
+    def __len__(self):
+        with self._lock:
+            return len(self._data)
+
+
+class SQLTool(Tool):
+    """Guarded SQL execution against the allow-listed schema.
+
+    Every query crosses ``SQLGuardrail`` before execution. Successful writes
+    (INSERT/UPDATE/DELETE) clear the SELECT cache so we never return stale
+    rows after a mutation. The cache itself is a bounded, thread-safe LRU
+    sized by ``config.SQL_QUERY_CACHE_SIZE``; setting that to 0 disables it.
+    """
+
+    def __init__(self, approval_handler=None):
+        super().__init__()
+        self.guardrail = SQLGuardrail()
+        self.approval_handler = approval_handler
+        self._query_cache = _ThreadSafeLRUCache(config.SQL_QUERY_CACHE_SIZE)
+
+    def get_name(self):
+        return "sql_tool"
+
+    def get_description(self):
+        return (
+            "Execute a SQL query against the e-commerce database. "
+            "Provide a single SQLite-compatible SQL statement. "
+            "Allowed tables: customers, products, orders, order_items."
+        )
+
+    def get_input_schema(self):
+        return {
+            "type": "object",
+            "properties": {
+                "sql": {
+                    "type": "string",
+                    "description": "The SQL query to execute. Must target only allowed tables.",
+                }
+            },
+            "required": ["sql"],
+        }
+
+    def execute(self, sql=None, _call_id=None, _session_id=None, _trace=None, **kwargs):
+        if not sql:
+            return ToolResult(
+                status="failed",
+                output="Error: 'sql' parameter is required.",
+            )
+
+        call_id = _call_id or "unknown"
+        session_id = _session_id or "unknown"
+
+        result = self.guardrail.check(sql)
+
+        if _trace:
+            _trace.log_guardrail_verdict(call_id, sql, result.verdict, result.reason)
+
+        if result.blocked:
+            return ToolResult(
+                status="blocked",
+                output=f"BLOCKED by guardrail: {result.reason}",
+                guardrail_verdict=result.verdict,
+            )
+
+        if result.requires_approval:
+            if self.approval_handler is None:
+                return ToolResult(
+                    status="blocked",
+                    output=f"Approval required but no handler configured: {result.reason}",
+                    guardrail_verdict=result.verdict,
+                )
+            if _trace:
+                _trace.log_approval_request(call_id, result.reason)
+            approved = self.approval_handler.request_approval(
+                call_id, session_id, result.reason, "sql_tool", {"sql": sql}
+            )
+            if _trace:
+                _trace.log_approval_decision(call_id, "approved" if approved else "denied")
+            if not approved:
+                return ToolResult(
+                    status="denied",
+                    output=f"Action denied by human: {result.reason}",
+                    guardrail_verdict=result.verdict,
+                    approval_reason=result.reason,
+                )
+
+        if result.statement_type in ("UPDATE", "DELETE") and result.verdict == VERDICT_ALLOWED:
+            approval_needed = self._check_row_count(sql, result, call_id, session_id, _trace)
+            if approval_needed is not None:
+                return approval_needed
+
+        return self._execute_sql(sql, call_id, result)
+
+    def _check_row_count(self, sql, guardrail_result, call_id, session_id, _trace):
+        count = self._estimate_affected_rows(sql)
+        if count is None:
+            return None
+
+        if count > config.RISKY_ROW_THRESHOLD:
+            reason = (
+                f"{guardrail_result.statement_type} would affect {count} rows "
+                f"(threshold: {config.RISKY_ROW_THRESHOLD}). "
+                f"This bulk operation requires approval."
+            )
+            if self.approval_handler is None:
+                return ToolResult(
+                    status="blocked",
+                    output=f"Approval required but no handler configured: {reason}",
+                    guardrail_verdict=VERDICT_REQUIRES_APPROVAL,
+                    approval_reason=reason,
+                )
+            if _trace:
+                _trace.log_approval_request(call_id, reason)
+            approved = self.approval_handler.request_approval(
+                call_id, session_id, reason, "sql_tool", {"sql": sql}
+            )
+            if _trace:
+                _trace.log_approval_decision(call_id, "approved" if approved else "denied")
+            if not approved:
+                return ToolResult(
+                    status="denied",
+                    output=f"Action denied by human: {reason}",
+                    guardrail_verdict=VERDICT_REQUIRES_APPROVAL,
+                    approval_reason=reason,
+                )
+        return None
+
+    def _estimate_affected_rows(self, sql):
+        try:
+            parsed = sqlglot.parse_one(sql, read="sqlite")
+
+            if hasattr(parsed, "args") and parsed.args.get("where") is not None:
+                where_node = parsed.args["where"]
+                table = None
+                for t in parsed.find_all(sqlglot.exp.Table):
+                    table = t
+                    break
+
+                if table is None:
+                    return None
+
+                count_sql = (
+                    f"SELECT COUNT(*) AS cnt FROM {table.name} WHERE {where_node.this.sql()}"
+                )
+                conn = get_connection()
+                try:
+                    row = conn.execute(count_sql).fetchone()
+                    return row["cnt"] if row else 0
+                finally:
+                    conn.close()
+            return None
+        except Exception:
+            return None
+
+    def _execute_sql(self, sql, call_id, guardrail_result):
+        conn = get_connection()
+        try:
+            # Check query cache for SELECTs
+            if guardrail_result.statement_type == "SELECT":
+                cached = self._query_cache.get(sql)
+                if cached is not None:
+                    return cached
+
+            cursor = conn.execute(sql)
+            if guardrail_result.statement_type == "SELECT":
+                columns = [desc[0] for desc in cursor.description] if cursor.description else []
+                rows = cursor.fetchall()
+                if not rows:
+                    result = ToolResult(
+                        status="success",
+                        output="Query returned 0 rows.",
+                        guardrail_verdict=guardrail_result.verdict,
+                    )
+                    self._query_cache.set(sql, result)
+                    return result
+                formatted = self._format_rows(columns, rows)
+                result = ToolResult(
+                    status="success",
+                    output=formatted,
+                    guardrail_verdict=guardrail_result.verdict,
+                )
+                self._query_cache.set(sql, result)
+                return result
+            else:
+                conn.commit()
+                affected = cursor.rowcount
+                # Invalidate the cache: any write may have changed the rows
+                # a subsequent SELECT would return, so a stale cached SELECT
+                # would be incorrect.
+                self._query_cache.clear()
+                return ToolResult(
+                    status="success",
+                    output=f"Statement executed successfully. {affected} row(s) affected.",
+                    guardrail_verdict=guardrail_result.verdict,
+                )
+        except Exception as e:
+            return ToolResult(
+                status="failed",
+                output=f"SQL execution error: {e}",
+                guardrail_verdict=guardrail_result.verdict,
+            )
+        finally:
+            conn.close()
+
+    def _format_rows(self, columns, rows, max_rows=50):
+        lines = [" | ".join(columns)]
+        lines.append("-" * len(lines[0]))
+        for row in rows[:max_rows]:
+            lines.append(" | ".join(str(v) for v in row))
+        if len(rows) > max_rows:
+            lines.append(f"... ({len(rows) - max_rows} more rows)")
+            
+        formatted_text = "\n".join(lines)
+        return PIIGuardrail.mask_pii(formatted_text)

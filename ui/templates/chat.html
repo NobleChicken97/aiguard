@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Chat{% endblock %}
+{% block content %}
+<section class="hero">
+  <div>
+    <h1>Agent Chat</h1>
+    <p>Send a message to the agent. Tool calls, guardrail verdicts, and final answers are persisted to the trace.</p>
+  </div>
+  <div class="stats">
+    <div class="label">Session</div>
+    <div class="value" id="session-id-display" style="font-size: 1rem;">New</div>
+    <div class="muted">Active conversation</div>
+  </div>
+</section>
+
+<section class="grid" style="grid-template-columns: 1fr;">
+  <article class="card">
+    <div class="card-header">
+      <h2>Conversation</h2>
+      <span class="badge good">Live</span>
+    </div>
+    <div class="card-body">
+      <div id="chat-history" class="timeline" style="max-height: 60vh; overflow-y: auto;">
+        <div class="approval">
+          <p class="muted" style="margin-bottom: 0;">Type a message below to start.</p>
+        </div>
+      </div>
+
+      <form id="chat-form" style="margin-top: 1rem;">
+        <div class="row" style="align-items: stretch;">
+          <input id="message-input" type="text" placeholder="Ask the agent something..." autocomplete="off"
+                 style="flex: 1; background: rgba(2, 6, 23, 0.7); border: 1px solid var(--panel-border); border-radius: 0.8rem; padding: 0.8rem 1rem; color: var(--text); font: inherit; min-width: 0;">
+          <button class="button approve" type="submit" id="send-button">Send</button>
+        </div>
+      </form>
+      <p class="muted" style="margin-top: 0.75rem; font-size: 0.85rem;">
+        The web chat uses auto-approval so risk-gated actions resolve without blocking the page.
+        Look at the <a href="/approval-queue">Approval Queue</a> to see the human-in-the-loop flow.
+      </p>
+    </div>
+  </article>
+</section>
+
+<script>
+  const storageKey = 'agent_chat_session_id';
+  let sessionId = localStorage.getItem(storageKey) || null;
+
+  function setSessionDisplay(id) {
+    document.getElementById('session-id-display').textContent = id ? id.slice(0, 8) + '...' : 'New';
+  }
+
+  function appendBubble(role, text) {
+    const history = document.getElementById('chat-history');
+    const bubble = document.createElement('div');
+    bubble.className = 'event';
+    const isUser = role === 'user';
+    bubble.innerHTML = `
+      <div class="event-head">
+        <div class="event-type">${isUser ? 'You' : 'Assistant'}</div>
+        <div class="event-time">${new Date().toLocaleString()}</div>
+      </div>
+      <pre style="background: ${isUser ? 'rgba(125, 211, 252, 0.08)' : 'rgba(52, 211, 153, 0.08)'};">${escapeHtml(text)}</pre>
+    `;
+    history.appendChild(bubble);
+    history.scrollTop = history.scrollHeight;
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function setLoading(loading) {
+    const btn = document.getElementById('send-button');
+    const input = document.getElementById('message-input');
+    btn.disabled = loading;
+    input.disabled = loading;
+    btn.textContent = loading ? 'Thinking...' : 'Send';
+  }
+
+  document.getElementById('chat-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('message-input');
+    const message = input.value.trim();
+    if (!message) return;
+
+    appendBubble('user', message);
+    input.value = '';
+    setLoading(true);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, user_id: 'web_user', session_id: sessionId }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        appendBubble('assistant', 'Error: ' + (data.detail || data.error || 'Unknown error'));
+        return;
+      }
+      sessionId = data.session_id;
+      localStorage.setItem(storageKey, sessionId);
+      setSessionDisplay(sessionId);
+      appendBubble('assistant', data.response);
+    } catch (err) {
+      appendBubble('assistant', 'Network error: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  setSessionDisplay(sessionId);
+</script>
+{% endblock %}

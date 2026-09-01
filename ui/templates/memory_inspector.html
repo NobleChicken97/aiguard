@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Memory Inspector{% endblock %}
+{% block content %}
+<section class="hero">
+  <div>
+    <h1>Memory Inspector</h1>
+    <p>View the long-term facts the system has remembered about each user across sessions.</p>
+  </div>
+  <div class="stats">
+    <div class="label">Facts</div>
+    <div class="value" id="fact-count">0</div>
+    <div class="muted">Loaded</div>
+  </div>
+</section>
+
+<section class="grid" style="grid-template-columns: 1fr;">
+  <article class="card">
+    <div class="card-header">
+      <h2>Lookup</h2>
+      <span class="badge good">Long-term memory</span>
+    </div>
+    <div class="card-body">
+      <form id="memory-form">
+        <div class="row" style="align-items: stretch;">
+          <input id="user-id-input" type="text" placeholder="Enter user id (e.g. web_user)" autocomplete="off"
+                 style="flex: 1; background: rgba(2, 6, 23, 0.7); border: 1px solid var(--panel-border); border-radius: 0.8rem; padding: 0.8rem 1rem; color: var(--text); font: inherit; min-width: 0;">
+          <button class="button approve" type="submit">Load</button>
+        </div>
+      </form>
+
+      <div id="facts-list" class="stack" style="margin-top: 1.25rem;">
+        <div class="approval">
+          <p class="muted" style="margin-bottom: 0;">Enter a user id to see persisted facts.</p>
+        </div>
+      </div>
+    </div>
+  </article>
+</section>
+
+<script>
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  document.getElementById('memory-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const userId = document.getElementById('user-id-input').value.trim();
+    if (!userId) return;
+
+    const list = document.getElementById('facts-list');
+    list.innerHTML = '<div class="approval"><p class="muted" style="margin-bottom: 0;">Loading...</p></div>';
+
+    try {
+      const response = await fetch('/api/users/' + encodeURIComponent(userId) + '/memory');
+      const data = await response.json();
+      if (!response.ok) {
+        list.innerHTML = '<div class="approval"><p class="muted" style="margin-bottom: 0;">Error: ' + escapeHtml(data.detail || 'Unknown error') + '</p></div>';
+        return;
+      }
+
+      document.getElementById('fact-count').textContent = data.facts.length;
+
+      if (data.facts.length === 0) {
+        list.innerHTML = '<div class="approval"><p class="muted" style="margin-bottom: 0;">No facts stored for this user yet.</p></div>';
+        return;
+      }
+
+      list.innerHTML = '';
+      data.facts.forEach(fact => {
+        const item = document.createElement('div');
+        item.className = 'approval';
+        item.innerHTML = `
+          <p style="margin: 0 0 0.6rem;">${escapeHtml(fact.fact_text)}</p>
+          <div class="row" style="justify-content: space-between; align-items: center;">
+            <span class="badge good">${new Date(fact.created_at).toLocaleString()}</span>
+            <span class="muted">Session: ${escapeHtml(fact.source_session_id || 'unknown')}</span>
+          </div>
+        `;
+        list.appendChild(item);
+      });
+    } catch (err) {
+      list.innerHTML = '<div class="approval"><p class="muted" style="margin-bottom: 0;">Network error: ' + escapeHtml(err.message) + '</p></div>';
+    }
+  });
+</script>
+{% endblock %}

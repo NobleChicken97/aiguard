@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Trace Replay{% endblock %}
+{% block content %}
+<section class="hero">
+  <div>
+    <h1>Trace Replay</h1>
+    <p>Browse a session and inspect the exact sequence of plan, tool, guardrail, and approval events.</p>
+  </div>
+  <div class="stats">
+    <div class="label">Session</div>
+    <div class="value">{{ sessions|length }}</div>
+    <div class="muted">Recorded sessions</div>
+  </div>
+</section>
+
+<section class="grid">
+  <article class="card">
+    <div class="card-header">
+      <h2>Sessions</h2>
+      <span class="badge good">Replay ready</span>
+    </div>
+    <div class="card-body">
+      {% if sessions %}
+      <div class="section-list">
+        {% for session in sessions %}
+        <a class="session-link {% if session.session_id == selected_session_id %}active{% endif %}" href="/traces/{{ session.session_id }}">
+          <div class="row" style="justify-content: space-between; align-items: center;">
+            <strong>{{ session.user_id }}</strong>
+            <span class="badge {% if session.status == 'ended' %}good{% else %}warn{% endif %}">{{ session.status }}</span>
+          </div>
+          <div class="muted" style="margin-top: 0.35rem;">{{ session.session_id }}</div>
+          <div class="muted">{{ session.started_at }} · {{ session.event_count }} events</div>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="approval">
+        <div class="badge warn">No sessions</div>
+        <p style="margin-bottom: 0;">Run a prompt first, then refresh this page.</p>
+      </div>
+      {% endif %}
+    </div>
+  </article>
+
+  <article class="card">
+    <div class="card-header">
+      <h2>Events</h2>
+      <span class="badge warn">{{ selected_session_id or 'None selected' }}</span>
+    </div>
+    <div class="card-body">
+      {% if selected_trace %}
+      <div class="timeline">
+        {% for event in selected_trace %}
+        <div class="event">
+          <div class="event-head">
+            <div class="event-type">{{ event.event_type }}</div>
+            <div class="event-time">{{ event.timestamp }}</div>
+          </div>
+          <pre>{{ event.data | tojson(indent=2) }}</pre>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="approval">
+        <div class="badge warn">Empty trace</div>
+        <p style="margin-bottom: 0;">No events are available for the selected session.</p>
+      </div>
+      {% endif %}
+    </div>
+  </article>
+</section>
+{% endblock %}

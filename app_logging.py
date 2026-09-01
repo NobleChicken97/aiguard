@@ -1,0 +1,59 @@
+"""Centralized logging setup.
+
+The webapp and long-running tools use the standard ``logging`` module so
+operators can route output to files, log aggregators, or stdout without
+touching the application code. The CLI approval handler keeps its
+``print()`` calls because those are intentionally user-facing prompts.
+
+Call ``configure_logging(level=...)`` once at process start (the webapp
+lifespan does this). A null-handler is installed by default so library
+imports do not emit ``No handlers could be found`` warnings in tests.
+"""
+
+import logging
+import os
+import sys
+
+
+_DEFAULT_FORMAT = "%(asctime)s %(levelname)s %(name)s :: %(message)s"
+_LOG_LEVELS = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
+
+
+def _resolve_level(name):
+    if not name:
+        return logging.INFO
+    return _LOG_LEVELS.get(name.upper(), logging.INFO)
+
+
+def configure_logging(level=None, stream=None):
+    """Install a single stream handler on the root logger.
+
+    Idempotent: if a handler we've previously installed is still attached,
+    it is removed first so callers can re-configure at runtime.
+    """
+    level_name = level or os.getenv("LOG_LEVEL", "INFO")
+    handler = logging.StreamHandler(stream or sys.stderr)
+    handler.setFormatter(logging.Formatter(_DEFAULT_FORMAT))
+    handler.setLevel(_resolve_level(level_name))
+    handler.name = "agentic_guardrails_default"
+
+    root = logging.getLogger()
+    for h in list(root.handlers):
+        if getattr(h, "name", None) == "agentic_guardrails_default":
+            root.removeHandler(h)
+    root.addHandler(handler)
+    root.setLevel(_resolve_level(level_name))
+
+    # Quiet very chatty third-party loggers by default.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+
+def get_logger(name):
+    return logging.getLogger(name)

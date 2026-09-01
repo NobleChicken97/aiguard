@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+data/*.db
+data/*.db-journal
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+
+# graphify generated outputs
+graphify-out/
+.graphify_*
