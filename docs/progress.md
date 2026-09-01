@@ -1,8 +1,8 @@
 # Project Progress Tracking
 
-**Overall Status**: ✅ Phases 1-8 COMPLETE · ✅ Phase 9 COMPLETE (SQLite→PG migration script + CI postgres service; latent PG-path bugs fixed)
+**Overall Status**: ✅ Phases 1-9 COMPLETE · ✅ v1.6.0 Hardening · ✅ v1.6.1 Correctness & Safety Fixes
 
-> Last verified against code: August 21, 2026 — 79/79 tests passing without PostgreSQL (8 PG-gated skip); **87/87 with a live instance**.
+> Last verified against code: September 1, 2026 — **139/139 tests passing without PostgreSQL** (8 PG-gated skip; 147 collected in total).
 
 ## Phase 1 — Orchestrator + Tools
 **Status:** ✅ Completed
@@ -136,6 +136,52 @@
   supervisor refactor).
 - **Test suite grew from 87 → 131 tests** (123 pass without PG,
   8 PG-gated, 1 deprecation warning).
+
+## v1.6.1 — Correctness & Safety Fixes (Sep 1, 2026)
+**Status:** ✅ Completed
+
+Findings from the Sep 1 full-project audit (whole codebase + docs + UI read; graphify knowledge graph in `graphify-out/`):
+
+1. **Anthropic wire-format fix (blocker on the real API path)**:
+   `agent/llm_client.py::ContentBlock.to_dict` emitted the internal field
+   names (`tool_use_id`/`tool_name`/`tool_input`), but assistant `tool_use`
+   blocks must serialize as `id`/`name`/`input`. The worker loop appends
+   response blocks back into the conversation, so the **second** LLM call
+   after any tool call would fail with a 400 against the real API —
+   invisible to tests because `FakeLLMClient` never validates shapes.
+   Fixed + round-trip regression tests (`tests/test_llm_client.py`).
+2. **Fail-closed row-count gate**: `SQLTool._estimate_affected_rows`
+   returned `None` on estimation errors and the bulk-write gate was silently
+   skipped (fail-open). Estimation failure now **requires approval** like
+   any other bulk operation; the duplicated approval branches were unified
+   into `SQLTool._approval_gate` (`tests/test_rowcount_failclosed.py`).
+3. **Supervisor routing hardened**: substring matching (`"SQL" in reply`)
+   routed "RESEARCH (not SQL)" to the SQL worker and a missing text block
+   crashed `response.text.strip()`. Routing now matches the first token and
+   degrades safely to the SQL worker (`tests/test_supervisor_routing.py`).
+4. **Memory facts match the docs**: session-end distillation now runs
+   through the budget-wrapped LLM client (the raw-message fallback had been
+   persisting every user message as a "fact"), and every fact is PII-masked
+   before persistence — facts are injected into future system prompts, so
+   they cross the same masking as query output. `FakeLLMClient` intercepts
+   distillation prompts like router prompts so scripted flows are
+   unaffected (`tests/test_memory_distill.py`).
+5. **Chat page copy corrected**: `chat.html` still claimed the web chat
+   "uses auto-approval"; since v1.6.0 `/api/chat` defaults to
+   `WebApprovalHandler`. The page now says risk-gated actions pause in the
+   Approval Queue (chat waits up to two minutes for the decision).
+6. **Hardening & hygiene**: SQLite connections set `PRAGMA busy_timeout`
+   (no instant "database is locked" under the threadpool); PostgreSQL pool
+   switched to `ThreadedConnectionPool` (FastAPI serves sync endpoints from
+   a threadpool; `SimpleConnectionPool` is not thread-safe); `pytest.ini`
+   gained `testpaths = tests`; removed the stale root `_orch_test.py`
+   (bare `pytest` imported it at collection time, wiping the demo DB) and
+   the dead orchestrator tool-execution path (`_execute_tool_call`,
+   `_retry_execute`, `_persist_assistant_message`, `_persist_tool_call`,
+   unused `tool_registry`) superseded by the supervisor refactor.
+7. **Repository**: initialized as a git repository with a baseline commit
+   of the analyzed v1.6.0 state, followed by per-concern fix commits.
+   Test suite: 131 → 147 tests (139 pass without PG, 8 PG-gated).
 
 ## Phase 9 — Production Hardening (Aug 21, 2026)
 **Status:** ✅ Completed

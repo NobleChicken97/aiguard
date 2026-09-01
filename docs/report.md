@@ -89,7 +89,11 @@ The project test suite covers all safety, resilience, and integration paths:
 | Logging | 4 tests | 100% |
 | PostgreSQL integration | 3 tests (PG-gated) | 100% |
 | Migration script | 6 tests (5 PG-gated) | 100% |
-| **Total** | **131 tests** | **100% (123 without PG)** |
+| LLM wire format (v1.6.1) | 4 tests | 100% |
+| Row-count fail-closed gate (v1.6.1) | 4 tests | 100% |
+| Supervisor routing (v1.6.1) | 4 tests | 100% |
+| Memory distillation & PII masking (v1.6.1) | 4 tests | 100% |
+| **Total** | **147 tests** | **100% (139 without PG)** |
 
 ### Adversarial guardrail effectiveness
 
@@ -118,6 +122,21 @@ All 22 destructive SQL attempts across 17 adversarial prompts are blocked before
 
 ### Version history
 
+- **v1.6.1** (Sep 2026) — Correctness & safety fixes from the full-project audit:
+  - `ContentBlock.to_dict` now emits the Anthropic wire format
+    (`id`/`name`/`input`); the old internal key names broke the real-API
+    tool loop on the second LLM call after any tool call
+  - `SQLTool` fails closed: an un-estimatable affected-row count now
+    requires approval instead of silently skipping the bulk-write gate
+  - Supervisor routing matches the router's first token (no substring
+    false-positives) and survives replies without a text block
+  - Long-term memory facts are LLM-distilled through the budget-wrapped
+    client and PII-masked before persistence
+  - Chat page copy matches the v1.6.0 web-approval flow
+  - SQLite `busy_timeout`, threaded psycopg2 pool, `pytest.ini` testpaths,
+    dead orchestrator tool-execution path and stale `_orch_test.py` removed
+  - Test suite: 131 → 147 tests (139 pass without PG, 8 PG-gated);
+    repository initialized as a git repository with a baseline commit
 - **v1.6.0** (Sep 2026) — Hardening & quality pass:
   - Bounded thread-safe LRU cache for repeated SELECTs in `SQLTool`, with
     automatic invalidation on any successful write
