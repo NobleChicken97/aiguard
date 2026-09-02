@@ -111,6 +111,10 @@ class TestSupervisorRouting:
 class TestBudgetEnforcementOnWorkerPath:
     def test_cost_budget_halts_session(self, monkeypatch):
         monkeypatch.setattr(config, "SESSION_COST_BUDGET_USD", 0.000001)
+        # Pin a priced rate card: with a local .env setting a free-tier
+        # LLM_PROVIDER the estimate is $0 and the cost budget would
+        # legitimately never bind.
+        monkeypatch.setattr(config, "LLM_PROVIDER", "anthropic")
 
         fake_llm = FakeLLMClient([
             FakeLLMClient.tool_use_response(

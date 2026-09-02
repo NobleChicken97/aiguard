@@ -153,6 +153,11 @@ def test_chat_page_and_memory_inspector_pages_render():
 
 def test_chat_api_fails_gracefully_without_api_key(monkeypatch):
     monkeypatch.setattr(webapp_module.config, "ANTHROPIC_API_KEY", "")
+    # Hermetic against a local .env: force the legacy provider and clear any
+    # provider key so build_llm_client() returns None exactly as the test's
+    # "no key configured" scenario requires.
+    monkeypatch.setattr(webapp_module.config, "LLM_PROVIDER", "anthropic")
+    monkeypatch.setattr(webapp_module.config, "LLM_API_KEY", "")
     webapp_module._chat_llm_client_override = None
     with TestClient(app) as client:
         response = client.post("/api/chat", json={"message": "hello", "user_id": "web_user"})

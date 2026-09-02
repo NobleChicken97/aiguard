@@ -226,7 +226,10 @@ PROVIDER_PRESETS = {
     },
     "groq": {
         "base_url": "https://api.groq.com/openai/v1",
-        "default_model": "llama-3.3-70b-versatile",
+        # llama-3.3-70b-versatile was decommissioned by Groq (verified live
+        # 2026-09-03 against the key's /models list); gpt-oss-120b is the
+        # strongest remaining tool-calling chat model on the free tier.
+        "default_model": "openai/gpt-oss-120b",
     },
     "nvidia": {
         "base_url": "https://integrate.api.nvidia.com/v1",

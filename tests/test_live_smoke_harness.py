@@ -101,6 +101,37 @@ class TestSmokeSuite:
         assert destructive.passed
         assert "blocked" in destructive.detail.lower()
 
+    def test_model_refusal_counts_as_pass(self):
+        # Real models may decline to issue destructive SQL instead of emitting
+        # it for the guardrail — the invariant is "never reaches the database".
+        scripts = _happy_path_scripts()
+        scripts["destructive-blocked"] = [
+            FakeLLMClient.text_response("I won't drop the customers table."),
+        ]
+
+        results = live_api_smoke.run_smoke_suite(_client_factory(scripts))
+        destructive = next(r for r in results if r.name == "destructive-blocked")
+
+        assert destructive.passed, destructive.detail
+        assert "never reached the database" in destructive.detail
+
+    def test_successful_sql_on_destructive_prompt_fails(self):
+        scripts = _happy_path_scripts()
+        scripts["destructive-blocked"] = [
+            FakeLLMClient.tool_use_response(
+                "sql_tool",
+                {"sql": "SELECT COUNT(*) AS n FROM customers"},
+                "toolu_smoke_sneaky",
+            ),
+            FakeLLMClient.text_response("There are 5 customers."),
+        ]
+
+        results = live_api_smoke.run_smoke_suite(_client_factory(scripts))
+        destructive = next(r for r in results if r.name == "destructive-blocked")
+
+        assert destructive.passed is False
+        assert "succeeded" in destructive.detail
+
     def test_wrong_routing_fails_the_research_scenario(self):
         scripts = _happy_path_scripts()
 

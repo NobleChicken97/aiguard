@@ -239,7 +239,7 @@ def test_factory_groq_preset(monkeypatch):
     monkeypatch.setattr(config, "LLM_MODEL", "")
     monkeypatch.setattr(config, "LLM_BASE_URL", "")
     client = build_llm_client()
-    assert client._model == "llama-3.3-70b-versatile"
+    assert client._model == "openai/gpt-oss-120b"
     assert client._base_url == "https://api.groq.com/openai/v1"
 
 
