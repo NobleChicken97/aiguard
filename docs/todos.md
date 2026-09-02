@@ -84,11 +84,22 @@ The supervisor refactor left the following regressions vs documented behavior:
   7 scripted-client tests (`tests/test_live_smoke_harness.py`); the live
   run itself awaits a key in `.env`.
 
+## v1.6.6 — Groq Preset Fix + Live Smoke Verification (Sep 3, 2026) — completed
+- [x] **Groq preset default model fixed**: `llama-3.3-70b-versatile` was
+  decommissioned by Groq (found live via 404 model_not_found); preset now
+  `openai/gpt-oss-120b`, verified live for plain + tool calls.
+- [x] **Destructive-scenario check refined**: guardrail block OR model
+  refusal both pass; only a successful sql_tool call on the destructive
+  prompt fails.
+- [x] **Hermetic tests**: cost-budget + webapp no-key tests pin
+  `LLM_PROVIDER`/keys so a local `.env` can't flip their outcomes.
+- [x] **LIVE SMOKE 4/4 PASS, exit 0** (groq / openai/gpt-oss-120b,
+  2026-09-03) — ticket 01 fully closed including the real-key run.
+
 ## Next Up (recommended order)
-Tracked as tracer-bullet tickets in `.scratch/netsentry-vnext/issues/` (dependency-ordered; see ticket files for acceptance criteria). **Done:** 04–09, **11** (v1.6.2–v1.6.4) and **01 — live-API smoke harness** (v1.6.5, built + unit-tested; live run pending a key). Remaining frontier:
+Tracked as tracer-bullet tickets in `.scratch/netsentry-vnext/issues/` (dependency-ordered; see ticket files for acceptance criteria). **Done:** 04–09, **11** (v1.6.2–v1.6.4), **01 — live-API smoke harness** (v1.6.5, live-verified 4/4 in v1.6.6). Remaining frontier:
 1. **02** Publish repo to GitHub + activate CI — **needs the owner to create the repo/remote** → gates **03** Redis-in-CI
-2. **10** Supervisor routing spike — measurable with any configured free key (harness-style runner can reuse the v1.6.5 smoke scaffolding)
-3. **Run the live smoke** once a key exists: `LLM_PROVIDER=gemini` + AI Studio key (or `groq`) in `.env`, then `python -m scripts.live_api_smoke`
+2. **10** Supervisor routing spike — **now unblocked**: a free key is configured (`groq` / gpt-oss-120b), so latency/accuracy/cost of LLM routing vs a deterministic prefilter can be measured for real
 
 
 

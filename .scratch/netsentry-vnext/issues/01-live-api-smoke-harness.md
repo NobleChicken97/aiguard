@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** done (v1.6.5) — harness built and unit-tested with a scripted client; the live run itself executes once a key is configured in `.env`
+**Status:** done (v1.6.5) — **live-verified in v1.6.6: 4/4 scenarios PASS, exit 0** (2026-09-03, groq / openai/gpt-oss-120b)
 
 - [x] Running the harness with a valid key completes all four prompts without a 400/5xx and prints a pass/fail summary *(logic verified against a scripted client; live run pending a real key — `python -m scripts.live_api_smoke`)*
 - [x] The destructive prompt never reaches the database (blocked at the guardrail, visible in the trace)

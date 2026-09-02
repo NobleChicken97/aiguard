@@ -400,6 +400,11 @@ Exit 0 = pass/skip, 1 = failure.
 python -m scripts.live_api_smoke
 ```
 
+> Verified live 2026-09-03: **4/4 scenarios PASS** against
+> `LLM_PROVIDER=groq` (preset model `openai/gpt-oss-120b`), exit 0.
+> Note: Groq retired `llama-3.3-70b-versatile`; the groq preset default
+> is now `openai/gpt-oss-120b`.
+
 ---
 
 ## 📸 Demo Walkthroughs

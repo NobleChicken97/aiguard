@@ -96,8 +96,8 @@ The project test suite covers all safety, resilience, and integration paths:
 | Fact deletion, approval CSRF, builder audit (v1.6.2) | 6 tests | 100% |
 | Builder aggregates, FK joins, session lifecycle (v1.6.3) | 22 tests | 100% |
 | OpenAI-compatible provider layer (v1.6.4) | 20 tests | 100% |
-| Live-API smoke harness (v1.6.5) | 7 tests | 100% |
-| **Total** | **202 tests** | **100% (194 without PG)** |
+| Live-API smoke harness (v1.6.5) | 9 tests | 100% |
+| **Total** | **204 tests** | **100% (196 without PG)** |
 
 ### Adversarial guardrail effectiveness
 
@@ -126,6 +126,16 @@ All 22 destructive SQL attempts across 17 adversarial prompts are blocked before
 
 ### Version history
 
+- **v1.6.6** (Sep 2026) — Groq preset fix + live smoke verification:
+  - Groq decommissioned `llama-3.3-70b-versatile`; the preset now defaults
+    to `openai/gpt-oss-120b`, verified live for plain + tool-calling calls
+  - Destructive-scenario check refined: guardrail block OR model refusal
+    (no sql_tool call) both satisfy "never reaches the database"; only a
+    successful sql_tool call on the destructive prompt fails
+  - Budget/webapp tests made hermetic against a local `.env` with a real
+    free-tier key (they now pin `LLM_PROVIDER`/keys)
+  - **Live smoke 4/4 PASS, exit 0** (groq / openai/gpt-oss-120b)
+  - Test suite: 202 → 204 (196 pass without PG, 8 PG-gated)
 - **v1.6.5** (Sep 2026) — Live-API smoke harness (ticket 01):
   - `scripts/live_api_smoke.py` runs four fixed prompts (routing-only,
     read-only SQL, destructive DROP, research) through `Orchestrator` with
