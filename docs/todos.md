@@ -96,6 +96,25 @@ The supervisor refactor left the following regressions vs documented behavior:
 - [x] **LIVE SMOKE 4/4 PASS, exit 0** (groq / openai/gpt-oss-120b,
   2026-09-03) — ticket 01 fully closed including the real-key run.
 
+## v1.6.7 — Production CI Pipeline + Deployment Guidance (Sep 3, 2026) — completed
+- [x] **CI rewritten project-specifically** (`.github/workflows/ci.yml`):
+  five parallel gates — `static-checks` (pip check, ruff bug-class lint,
+  module importability), `test-sqlite` (adversarial suite + full suite +
+  real uvicorn boot probed via `/health`), `test-postgres` (postgres:16
+  service so the 8 PG-gated tests execute), `docker-build` (Dockerfile
+  builds + compose parses), and a dispatch-only `live-smoke` (LLM_API_KEY
+  secret, never on push) — plus a `release-gate` aggregate job for branch
+  protection. Concurrency-cancels superseded runs; `permissions:
+  contents: read`.
+- [x] **Ruff (bug subset E9/F63/F7/F82)** added to `pyproject.toml` dev
+  extras + `[tool.ruff.lint]`; codebase passes clean.
+- [x] **Deployment recommendation documented** (README + DEPLOYMENT.md):
+  AWS App Runner + RDS PostgreSQL with existing credits; Vercel/serverless
+  rejected with architectural reasons (in-process approval polling,
+  per-instance rate limiters, SSE, SQLite disk).
+- [x] **.gitignore** extended: run artifacts (`*.log`, coverage), OS/editor
+  noise.
+
 ## Next Up (recommended order)
 Tracked as tracer-bullet tickets in `.scratch/netsentry-vnext/issues/` (dependency-ordered; see ticket files for acceptance criteria). **Done:** 04–09, **11** (v1.6.2–v1.6.4), **01 — live-API smoke harness** (v1.6.5, live-verified 4/4 in v1.6.6). Remaining frontier:
 1. **02** Publish repo to GitHub + activate CI — **needs the owner to create the repo/remote** → gates **03** Redis-in-CI

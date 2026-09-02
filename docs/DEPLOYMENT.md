@@ -6,11 +6,42 @@ Complete deployment instructions for production use, staging, and demo environme
 
 ## ✨ Deployment Quick Links
 
+- [Platform recommendation (Sep 2026)](#platform-recommendation-sep-2026)
 - [Local Development](#local-development)
 - [Docker Compose](#docker-compose)
 - [Render/Railway (Cloud)](#renderrailway-cloud)
 - [AWS/GCP Digital Ocean](#awsgcp-digital-ocean)
 - [Production Checklist](#production-checklist)
+
+---
+
+## Platform recommendation (Sep 2026)
+
+**Recommended: AWS with your credits — AWS App Runner + RDS PostgreSQL.**
+The app ships a production Dockerfile, and App Runner builds and runs it
+directly (auto TLS, health-check-driven rollout — point it at `/health`,
+which already reports `db_connected`). Set `DATABASE_URL` to an RDS
+PostgreSQL instance and run the idempotent cutover script
+(`db/migrate_sqlite_to_pg.py`) once; Redis (`REDIS_URL`, ElastiCache) is
+optional and only needed for multi-instance memory sync.
+
+**Why not Vercel (or other serverless):** the architecture assumes a
+long-lived process, which is the point of several of its safety features —
+
+1. `WebApprovalHandler` polls the approvals table in a threadpool for up to
+   300s waiting on a human decision — serverless function timeouts kill
+   that mid-wait.
+2. Rate limiters (`webapp_ratelimit.py`) are in-process; serverless fans
+   out to ephemeral instances, so per-IP caps silently stop working.
+3. `/api/stream` is a long-lived SSE connection; agent turns run many
+   seconds to minutes.
+4. SQLite lives on a local disk that serverless filesystems reset on every
+   instance — you'd be forced onto a managed DB anyway.
+
+Containers-on-a-platform (App Runner, or ECS Fargate / Render / Railway)
+keep every one of those behaviors intact. Vercel is only a fit if the
+frontend is split into a static site — unnecessary here, since FastAPI
+serves the Jinja UI itself.
 
 ---
 

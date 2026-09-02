@@ -2,6 +2,8 @@
 
 **NetSentry Capstone Project — Advanced AI Engineering**
 
+[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml) <!-- replace OWNER/REPO once the GitHub remote exists (ticket 02) -->
+
 A production-ready agentic orchestration system that safely executes SQL queries against a real database through a comprehensive guardrail layer, human-in-the-loop approval system, and persistent memory.
 
 ---
@@ -174,6 +176,14 @@ See full implementation: [`guardrails/sql_guardrail.py`](guardrails/sql_guardrai
 ---
 
 ## 🌍 Deployment
+
+> **Recommendation (Sep 2026):** deploy with your AWS credits via
+> **AWS App Runner + RDS PostgreSQL** — the shipped Dockerfile builds and
+> runs directly, and `/health` doubles as the App Runner health check.
+> **Vercel/serverless is a poor fit**: the approval handler polls the DB
+> in-process for up to 300s, rate limiters are per-instance, SSE streams
+> are long-lived, and SQLite needs a persistent disk. Full analysis in
+> `docs/DEPLOYMENT.md` ("Platform recommendation").
 
 ### Local Development
 ```bash
@@ -386,6 +396,18 @@ pytest tests/test_webapp.py -v
 ```bash
 python -m pytest tests/test_prompt_adversarial.py -v
 ```
+
+### CI Gates (GitHub Actions, `.github/workflows/ci.yml`)
+Every push/PR runs five parallel gates and one aggregate `release-gate`
+(use it as the single required status check for branch protection):
+
+| Gate | What it proves |
+|------|----------------|
+| `static-checks` | dependency graph consistent (`pip check`), no bug-class issues (ruff E9/F: syntax errors, undefined names), every app module imports |
+| `test-sqlite` | adversarial guardrail suite + full 200+ test suite on the SQLite default path, then a **real uvicorn boot probed via `/health`** |
+| `test-postgres` | same suite against postgres:16 — the 8 PG-gated integration + migration tests execute instead of skipping |
+| `docker-build` | the shipped Dockerfile builds; the compose file parses |
+| `live-smoke` | manual (`workflow_dispatch` only): the live-API harness with the `LLM_API_KEY` secret — never runs on push |
 
 ### Live-API Smoke Harness (release check, v1.6.5)
 Runs four fixed prompts (routing-only, read-only SQL, destructive DROP,

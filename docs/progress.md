@@ -1,6 +1,6 @@
 # Project Progress Tracking
 
-**Overall Status**: ✅ Phases 1-9 COMPLETE · ✅ v1.6.0 Hardening · ✅ v1.6.1 Correctness · ✅ v1.6.2 Security & Auditability · ✅ v1.6.3 Builder Analytics + Session Lifecycle · ✅ v1.6.4 Free-Tier Provider Layer · ✅ v1.6.5 Live-API Smoke Harness · ✅ v1.6.6 Groq Preset Fix + Live Verification
+**Overall Status**: ✅ Phases 1-9 COMPLETE · ✅ v1.6.0–v1.6.6 (hardening → live smoke) · ✅ v1.6.7 Production CI Pipeline + Deployment Guidance
 
 > Last verified against code: September 3, 2026 — **196/196 tests passing without PostgreSQL** (8 PG-gated skip; 204 collected in total). Live smoke 4/4 PASS against groq.
 
@@ -136,6 +136,37 @@
   supervisor refactor).
 - **Test suite grew from 87 → 131 tests** (123 pass without PG,
   8 PG-gated, 1 deprecation warning).
+
+## v1.6.7 — Production CI Pipeline + Deployment Guidance (Sep 3, 2026)
+**Status:** ✅ Completed
+
+1. **CI rewritten project-specifically** (`.github/workflows/ci.yml`).
+   Five parallel gates plus an aggregate gate:
+   - `static-checks`: `pip check`, ruff restricted to bug classes
+     (E9/F63/F7/F82 — syntax errors, undefined names, invalid
+     comparisons; deliberately not style), and a clean import of every
+     app module.
+   - `test-sqlite`: the adversarial guardrail suite as a named step,
+     then the full 200+ suite on the SQLite default path, then a **real
+     uvicorn boot probed via `/health`** (30s budget, log dump on
+     failure) — a deployability check TestClient cannot give.
+   - `test-postgres`: full suite against a postgres:16 service so the
+     8 PG-gated integration + migration tests execute.
+   - `docker-build`: the shipped Dockerfile builds and the compose file
+     parses (with an empty `.env` stub — never printed).
+   - `live-smoke`: `workflow_dispatch` only — the v1.6.5 live-API
+     harness with the `LLM_API_KEY` repo secret; a missing secret fails
+     the job with instructions instead of passing vacuously.
+   - `release-gate`: single aggregate status for branch protection.
+   Concurrency cancels superseded runs on the same ref; workflow
+   `permissions` limited to `contents: read`.
+2. **Ruff** (bug subset) added to dev extras + `[tool.ruff.lint]`
+   config in `pyproject.toml`; codebase passes clean (verified locally).
+3. **Deployment recommendation** (README + `DEPLOYMENT.md`): AWS App
+   Runner + RDS PostgreSQL with the user's credits; serverless/Vercel
+   rejected with reasons (in-process approval polling up to 300s,
+   per-instance rate limiters, long-lived SSE, SQLite local disk).
+4. **.gitignore** extended (run artifacts, coverage, OS/editor noise).
 
 ## v1.6.6 — Groq Preset Fix + Live Smoke Verification (Sep 3, 2026)
 **Status:** ✅ Completed

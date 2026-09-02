@@ -126,6 +126,14 @@ All 22 destructive SQL attempts across 17 adversarial prompts are blocked before
 
 ### Version history
 
+- **v1.6.7** (Sep 2026) — Production CI pipeline + deployment guidance:
+  - CI rewritten as five project-specific gates (static bug-class lint,
+    SQLite suite + real uvicorn `/health` boot probe, postgres:16 suite,
+    Dockerfile/compose build, dispatch-only live-API smoke) plus a
+    `release-gate` aggregate job for branch protection
+  - Ruff bug-subset lint added (dev extra + pyproject config); passes clean
+  - Deployment recommendation documented: AWS App Runner + RDS PostgreSQL
+    (credits); serverless/Vercel rejected with architectural reasons
 - **v1.6.6** (Sep 2026) — Groq preset fix + live smoke verification:
   - Groq decommissioned `llama-3.3-70b-versatile`; the preset now defaults
     to `openai/gpt-oss-120b`, verified live for plain + tool-calling calls

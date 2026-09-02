@@ -1,12 +1,82 @@
 name: CI
 
+# Project-specific quality gates for NetSentry (FastAPI agent + SQL guardrails):
+#   static-checks  — dependency consistency, bug-class lint (ruff E9/F), module importability
+#   test-sqlite    — adversarial guardrail suite + full 200+ test suite on the SQLite
+#                    default path, then a real uvicorn boot + /health probe
+#   test-postgres  — same suite against postgres:16 so the 8 PG-gated integration
+#                    and migration tests actually execute
+#   docker-build   — the shipped Dockerfile builds and the compose file parses
+#   live-smoke     — manual (workflow_dispatch): the v1.6.5 live-API harness against
+#                    a real provider key (LLM_API_KEY secret); never runs on push
+#   release-gate   — single green status covering all of the above, for branch protection
+
 on:
   push:
     branches: ["**"]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt ruff
+      - name: Dependency consistency (pip check)
+        run: pip check
+      - name: Lint for bug classes (syntax errors, undefined names, bad comparisons)
+        # Deliberately the E9/F bug subset, not style: the suite already
+        # covers behavior; this catches NameErrors a test may never reach.
+        run: ruff check .
+      - name: All app modules import cleanly
+        run: python -c "import config, main, webapp, agent, tools, guardrails, approval, db, scripts"
+
+  test-sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Adversarial guardrail suite (destructive prompts must all block)
+        run: pytest tests/test_prompt_adversarial.py -q
+      - name: Full test suite (SQLite path; PG-gated tests skip)
+        run: pytest -q
+      - name: Boot the real webapp and probe /health
+        run: |
+          uvicorn webapp:app --host 127.0.0.1 --port 8765 > uvicorn.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8765/health; then
+              echo "webapp booted and healthy"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::webapp did not become healthy within 30s"
+          cat uvicorn.log
+          exit 1
+
+  test-postgres:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -31,6 +101,66 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Install dependencies
-        run: pip install -r requirements.txt
-      - name: Run full test suite (SQLite + PostgreSQL integration)
-        run: pytest tests/ -v
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Full test suite including PG-gated integration + migration tests
+        run: pytest -q
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the production image
+        run: docker build -t netsentry-ci:${{ github.sha }} .
+      - name: Validate the compose file
+        run: |
+          # compose references .env via env_file; provide an empty one so the
+          # structural validation works without secrets (never printed).
+          touch .env
+          docker compose config -q
+
+  live-smoke:
+    # Manual release check only: burns provider quota and depends on a live
+    # API, so it never runs on push/PR. The harness asserts routing, tool
+    # execution, and guardrail blocking with a real key end-to-end.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Require the LLM_API_KEY secret for manual runs
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: |
+          if [ -z "$LLM_API_KEY" ]; then
+            echo "::error::Set the LLM_API_KEY repo secret (a free Groq key works) to run the live smoke"
+            exit 1
+          fi
+      - name: Live-API smoke (4 fixed prompts, auto-deny, trace assertions)
+        env:
+          LLM_PROVIDER: groq
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+        run: python -m scripts.live_api_smoke
+
+  release-gate:
+    # One required status check for branch protection: green only when every
+    # push-triggered gate above is green.
+    needs: [static-checks, test-sqlite, test-postgres, docker-build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: All gates passed
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ] || [ "${{ contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "::error::one or more CI gates failed"
+            exit 1
+          fi
+          echo "static checks, sqlite suite, postgres suite, and docker build all green"

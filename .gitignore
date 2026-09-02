@@ -11,6 +11,17 @@ venv/
 dist/
 build/
 
+# local run artifacts (uvicorn.log is written by the CI boot probe too)
+*.log
+.coverage
+htmlcov/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
 # graphify generated outputs
 graphify-out/
 .graphify_*
