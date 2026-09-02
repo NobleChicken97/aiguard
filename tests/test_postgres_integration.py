@@ -37,9 +37,11 @@ def pg_env():
     config.DATABASE_URL = TEST_DATABASE_URL
     dbmod._pg_pool = None
     try:
-        # Disposable instances are often reused across runs; clear all rows
-        # AND restart SERIAL sequences so seed_demo_data() always produces
-        # deterministic ids (TRUNCATE alone leaves sequences advanced).
+        # A fresh database (e.g. the CI service container) has no schema yet;
+        # initialize_db() is idempotent (CREATE TABLE IF NOT EXISTS), so run
+        # it before TRUNCATE. Reused instances are then cleared and SERIAL
+        # sequences restarted so seed_demo_data() stays deterministic.
+        dbmod.initialize_db()
         conn = dbmod.get_connection()
         try:
             conn.execute(

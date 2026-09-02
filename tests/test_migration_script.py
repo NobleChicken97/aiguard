@@ -35,9 +35,12 @@ def pg_env():
     config.DATABASE_URL = TEST_DATABASE_URL
     dbmod._pg_pool = None
     try:
-        # Same contract as test_postgres_integration: reused disposable
-        # instances need rows cleared AND SERIAL sequences restarted so
-        # id-dependent assertions stay deterministic across runs.
+        # Same contract as test_postgres_integration: initialize_db() first
+        # (idempotent) because a fresh database — e.g. the CI service
+        # container — has no schema yet; reused instances are then cleared
+        # and SERIAL sequences restarted so id-dependent assertions stay
+        # deterministic across runs.
+        dbmod.initialize_db()
         conn = dbmod.get_connection()
         try:
             conn.execute(
