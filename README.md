@@ -387,6 +387,19 @@ pytest tests/test_webapp.py -v
 python -m pytest tests/test_prompt_adversarial.py -v
 ```
 
+### Live-API Smoke Harness (release check, v1.6.5)
+Runs four fixed prompts (routing-only, read-only SQL, destructive DROP,
+research) end-to-end against the configured provider in auto-deny mode and
+asserts the trace outcomes: route recorded, tool call recorded, and the
+destructive attempt blocked at the guardrail before touching the database.
+Exit 0 = pass/skip, 1 = failure.
+
+```bash
+# Needs LLM_PROVIDER + LLM_API_KEY (or ANTHROPIC_API_KEY) in .env;
+# without a key it prints setup instructions and skips cleanly.
+python -m scripts.live_api_smoke
+```
+
 ---
 
 ## 📸 Demo Walkthroughs

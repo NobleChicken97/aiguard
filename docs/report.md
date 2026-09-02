@@ -96,7 +96,8 @@ The project test suite covers all safety, resilience, and integration paths:
 | Fact deletion, approval CSRF, builder audit (v1.6.2) | 6 tests | 100% |
 | Builder aggregates, FK joins, session lifecycle (v1.6.3) | 22 tests | 100% |
 | OpenAI-compatible provider layer (v1.6.4) | 20 tests | 100% |
-| **Total** | **195 tests** | **100% (187 without PG)** |
+| Live-API smoke harness (v1.6.5) | 7 tests | 100% |
+| **Total** | **202 tests** | **100% (194 without PG)** |
 
 ### Adversarial guardrail effectiveness
 
@@ -125,6 +126,18 @@ All 22 destructive SQL attempts across 17 adversarial prompts are blocked before
 
 ### Version history
 
+- **v1.6.5** (Sep 2026) — Live-API smoke harness (ticket 01):
+  - `scripts/live_api_smoke.py` runs four fixed prompts (routing-only,
+    read-only SQL, destructive DROP, research) through `Orchestrator` with
+    `AutoDenyHandler` against any configured provider key and asserts trace
+    outcomes: route recorded (ResearchWorker for research), sql_tool called
+    and successful, destructive attempt BLOCKED at the guardrail with no
+    successful sql_tool call, no DB access on the research path
+  - Release-check semantics: exit 0 on all-pass or clean skip, 1 on any
+    failure; skipped with setup instructions when no key is configured
+  - Logic covered by 7 scripted-client tests (no key needed); the live run
+    itself awaits a key in `.env`
+  - Test suite: 195 → 202 (194 pass without PG, 8 PG-gated)
 - **v1.6.4** (Sep 2026) — Free-tier LLM provider layer:
   - `LLM_PROVIDER` selects the client: anthropic (legacy default) or
     OpenAI-compatible providers — gemini, groq, nvidia, openai presets and
@@ -201,6 +214,7 @@ The project includes the following significant features and hardening steps:
 - session memory plus trace logging
 - dashboard and query builder UIs
 - SQLite-to-PostgreSQL migration support and CI hardening
+- live-API smoke harness — four fixed prompts assert routing, tool use, and guardrail blocking against any configured provider key (v1.6.5)
 
 ## Remaining items and optional enhancements
 The remaining items are not blockers; they are value-add improvements:

@@ -72,11 +72,23 @@ The supervisor refactor left the following regressions vs documented behavior:
 - [x] **Test suite grew from 87 → 131 tests** (123 pass without PG,
   8 PG-gated).
 
+## v1.6.5 — Live-API Smoke Harness (Sep 2, 2026) — completed
+- [x] **Ticket 01 — live-API smoke harness**: `scripts/live_api_smoke.py`
+  runs four fixed prompts (routing-only, read-only SQL, destructive DROP,
+  research) end-to-end through `Orchestrator` with `AutoDenyHandler` and
+  asserts trace outcomes: route recorded (ResearchWorker for research),
+  sql_tool called + successful, destructive attempt `BLOCKED` at the
+  guardrail with no successful sql_tool call, no DB access on the research
+  path. Exit 0 pass/skip, 1 fail — usable as a release check. Skips cleanly
+  with setup instructions when no LLM key is configured. Logic covered by
+  7 scripted-client tests (`tests/test_live_smoke_harness.py`); the live
+  run itself awaits a key in `.env`.
+
 ## Next Up (recommended order)
-Tracked as tracer-bullet tickets in `.scratch/netsentry-vnext/issues/` (dependency-ordered; see ticket files for acceptance criteria). **Done:** 04–09 (v1.6.2/v1.6.3) and **11 — free-tier provider layer** (v1.6.4: `LLM_PROVIDER=gemini|groq|...` + `LLM_API_KEY` runs the whole agent without an Anthropic key). Remaining frontier:
-1. **01** Live-API smoke harness — **needs a free LLM key** (`LLM_PROVIDER=gemini` + AI Studio key, or `groq` + console.groq.com key) — the provider layer it exercises is already merged
-2. **02** Publish repo to GitHub + activate CI — **needs the owner to create the repo/remote** → gates **03** Redis-in-CI
-3. **10** Supervisor routing spike — measurable with any configured free key
+Tracked as tracer-bullet tickets in `.scratch/netsentry-vnext/issues/` (dependency-ordered; see ticket files for acceptance criteria). **Done:** 04–09, **11** (v1.6.2–v1.6.4) and **01 — live-API smoke harness** (v1.6.5, built + unit-tested; live run pending a key). Remaining frontier:
+1. **02** Publish repo to GitHub + activate CI — **needs the owner to create the repo/remote** → gates **03** Redis-in-CI
+2. **10** Supervisor routing spike — measurable with any configured free key (harness-style runner can reuse the v1.6.5 smoke scaffolding)
+3. **Run the live smoke** once a key exists: `LLM_PROVIDER=gemini` + AI Studio key (or `groq`) in `.env`, then `python -m scripts.live_api_smoke`
 
 
 

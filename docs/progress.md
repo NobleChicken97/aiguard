@@ -1,8 +1,8 @@
 # Project Progress Tracking
 
-**Overall Status**: ✅ Phases 1-9 COMPLETE · ✅ v1.6.0 Hardening · ✅ v1.6.1 Correctness · ✅ v1.6.2 Security & Auditability · ✅ v1.6.3 Builder Analytics + Session Lifecycle · ✅ v1.6.4 Free-Tier Provider Layer
+**Overall Status**: ✅ Phases 1-9 COMPLETE · ✅ v1.6.0 Hardening · ✅ v1.6.1 Correctness · ✅ v1.6.2 Security & Auditability · ✅ v1.6.3 Builder Analytics + Session Lifecycle · ✅ v1.6.4 Free-Tier Provider Layer · ✅ v1.6.5 Live-API Smoke Harness
 
-> Last verified against code: September 2, 2026 — **187/187 tests passing without PostgreSQL** (8 PG-gated skip; 195 collected in total).
+> Last verified against code: September 2, 2026 — **194/194 tests passing without PostgreSQL** (8 PG-gated skip; 202 collected in total).
 
 ## Phase 1 — Orchestrator + Tools
 **Status:** ✅ Completed
@@ -136,6 +136,33 @@
   supervisor refactor).
 - **Test suite grew from 87 → 131 tests** (123 pass without PG,
   8 PG-gated, 1 deprecation warning).
+
+## v1.6.5 — Live-API Smoke Harness (Sep 2, 2026)
+**Status:** ✅ Completed
+
+Ticket 01 from the tracer-bullet board: the guardrail's "proof with a real
+key" that the scripted suite cannot provide.
+
+1. **Harness** (`scripts/live_api_smoke.py`, run as
+   `python -m scripts.live_api_smoke`): four fixed prompts — routing-only,
+   read-only SQL, destructive DROP, research — each on a fresh session
+   through `Orchestrator` with `AutoDenyHandler`. Trace assertions: route
+   recorded (ResearchWorker for the research prompt), sql_tool called and
+   successful, destructive attempt BLOCKED at the guardrail with no
+   successful sql_tool call, no database access on the research path.
+2. **Release-check semantics**: exit 0 on all-pass or clean skip, 1 on any
+   failure; per-scenario PASS/FAIL lines with duration and trace-replay
+   session links.
+3. **No-key skip**: without `LLM_API_KEY`/`ANTHROPIC_API_KEY` it prints
+   setup instructions and exits 0, so CI/schedulers can invoke it
+   unconditionally.
+4. **Tests**: `tests/test_live_smoke_harness.py` — 7 tests driving the
+   suite with a routing-configurable scripted client (happy path, guardrail
+   block visible in detail, wrong routing fails research, missing sql_tool
+   call fails read-only, provider exception contained per scenario, no-key
+   skip, configured-client pass). No key needed.
+
+Test suite: 195 → 202 tests (194 pass without PG, 8 PG-gated).
 
 ## v1.6.4 — Free-Tier LLM Provider Layer (Sep 2, 2026)
 **Status:** ✅ Completed
