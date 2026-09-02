@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 import config
@@ -202,7 +203,7 @@ class FakeLLMClient:
                     tool_use_id=uid,
                     tool_name=name,
                     tool_input=inp,
-                )
+                ),
             )
         return LLMResponse(
             stop_reason="tool_use",
@@ -210,3 +211,202 @@ class FakeLLMClient:
             input_tokens=10,
             output_tokens=40,
         )
+
+
+# ---------------------------------------------------------------------------
+# Provider layer (v1.6.4): run the same agent loops on free-tier,
+# OpenAI-compatible providers (Gemini, Groq, NVIDIA NIM, ...) instead of or
+# alongside Anthropic. Presets verified against provider docs (2026-09).
+# ---------------------------------------------------------------------------
+
+PROVIDER_PRESETS = {
+    "gemini": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "default_model": "gemini-2.5-flash",
+    },
+    "groq": {
+        "base_url": "https://api.groq.com/openai/v1",
+        "default_model": "llama-3.3-70b-versatile",
+    },
+    "nvidia": {
+        "base_url": "https://integrate.api.nvidia.com/v1",
+        "default_model": "meta/llama-3.3-70b-instruct",
+    },
+    "openai": {
+        "base_url": "https://api.openai.com/v1",
+        "default_model": "gpt-4o-mini",
+    },
+}
+
+
+def _to_openai_tool(schema):
+    """Project tool schema ({name, description, input_schema}) -> OpenAI function tool."""
+    return {
+        "type": "function",
+        "function": {
+            "name": schema["name"],
+            "description": schema.get("description", ""),
+            "parameters": schema.get("input_schema") or {"type": "object", "properties": {}},
+        },
+    }
+
+
+def _to_openai_messages(messages):
+    """Translate project messages (Anthropic-shaped) to OpenAI chat format.
+
+    - Plain-string user/assistant messages pass through.
+    - Assistant content-block lists become one assistant message whose
+      tool_use blocks (keys ``id``/``name``/``input`` after the v1.6.1 wire
+      fix, legacy ``tool_use_id``/``tool_name``/``tool_input`` accepted)
+      turn into OpenAI ``tool_calls`` with JSON-string arguments.
+    - User tool_result blocks become ``role:"tool"`` messages keyed by
+      ``tool_call_id`` — one per result, order preserved.
+    """
+    out = []
+    for msg in messages:
+        role = msg.get("role")
+        content = msg.get("content")
+        if isinstance(content, str):
+            out.append({"role": role, "content": content})
+            continue
+        blocks = content or []
+        if role == "assistant":
+            text = "\n".join(
+                b.get("text", "") for b in blocks if b.get("type") == "text" and b.get("text")
+            )
+            entry = {"role": "assistant", "content": text or None}
+            tool_calls = []
+            for b in blocks:
+                if b.get("type") != "tool_use":
+                    continue
+                tool_calls.append(
+                    {
+                        "id": b.get("tool_use_id") or b.get("id"),
+                        "type": "function",
+                        "function": {
+                            "name": b.get("tool_name") or b.get("name"),
+                            "arguments": json.dumps(
+                                b.get("tool_input") or b.get("input") or {},
+                                default=str,
+                            ),
+                        },
+                    }
+                )
+            if tool_calls:
+                entry["tool_calls"] = tool_calls
+            out.append(entry)
+        else:  # user message carrying tool_result / text blocks
+            for b in blocks:
+                if b.get("type") == "tool_result":
+                    text = str(b.get("content", ""))
+                    if b.get("is_error"):
+                        text = f"ERROR: {text}"
+                    out.append(
+                        {"role": "tool", "tool_call_id": b.get("tool_use_id"), "content": text}
+                    )
+                elif b.get("type") == "text" and b.get("text"):
+                    out.append({"role": "user", "content": b["text"]})
+    return out
+
+
+def _from_openai_response(response):
+    """Map an OpenAI chat completion onto the internal LLMResponse shape."""
+    choice = response.choices[0]
+    message = choice.message
+    blocks = []
+    if message.content:
+        blocks.append(ContentBlock(type="text", text=message.content))
+    tool_calls = getattr(message, "tool_calls", None) or []
+    for tc in tool_calls:
+        raw_arguments = tc.function.arguments or "{}"
+        try:
+            tool_input = json.loads(raw_arguments)
+        except (TypeError, ValueError):
+            tool_input = {"_raw_arguments": raw_arguments}
+        blocks.append(
+            ContentBlock(
+                type="tool_use",
+                tool_use_id=tc.id,
+                tool_name=tc.function.name,
+                tool_input=tool_input,
+            )
+        )
+    usage = getattr(response, "usage", None)
+    return LLMResponse(
+        stop_reason="tool_use" if tool_calls else "end_turn",
+        content=blocks,
+        input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+        output_tokens=getattr(usage, "completion_tokens", 0) or 0,
+    )
+
+
+class OpenAICompatLLMClient:
+    """Client for any OpenAI-compatible chat-completions endpoint.
+
+    The supervisor/worker loops depend only on ``call(system, messages,
+    tools)`` returning an ``LLMResponse``, so this adapter makes the whole
+    agent (routing, tool loops, budgets) provider-agnostic. Free-tier
+    presets: gemini (AI Studio key), groq, nvidia.
+    """
+
+    def __init__(self, api_key=None, model=None, base_url=None, client=None):
+        self._api_key = api_key or config.LLM_API_KEY
+        self._model = model or config.LLM_MODEL or "gpt-4o-mini"
+        self._base_url = base_url or config.LLM_BASE_URL or None
+        if client is not None:
+            # Test seam: a pre-built client object (stub or real OpenAI()).
+            self._client = client
+        else:
+            from openai import OpenAI
+
+            kwargs = {"api_key": self._api_key}
+            if self._base_url:
+                kwargs["base_url"] = self._base_url
+            self._client = OpenAI(**kwargs)
+
+    def call(self, system, messages, tools=None):
+        body_messages = []
+        if system:
+            body_messages.append({"role": "system", "content": system})
+        body_messages.extend(_to_openai_messages(messages))
+
+        kwargs = {
+            "model": self._model,
+            "max_tokens": config.MAX_TOKENS,
+            "messages": body_messages,
+        }
+        if tools:
+            kwargs["tools"] = [_to_openai_tool(t) for t in tools]
+
+        response = self._client.chat.completions.create(**kwargs)
+        return _from_openai_response(response)
+
+
+def build_llm_client():
+    """Factory honoring ``config.LLM_PROVIDER``; returns None without a key.
+
+    "anthropic" (default) needs ANTHROPIC_API_KEY; every other provider needs
+    LLM_API_KEY (plus LLM_BASE_URL when provider is "openai-compat"). Model
+    and base URL default from the provider preset unless overridden.
+    """
+    provider = (config.LLM_PROVIDER or "anthropic").strip().lower()
+    if provider == "anthropic":
+        if not config.ANTHROPIC_API_KEY:
+            return None
+        return ClaudeLLMClient()
+
+    preset = PROVIDER_PRESETS.get(provider)
+    if preset is None and provider != "openai-compat":
+        raise ValueError(
+            f"Unsupported LLM_PROVIDER '{provider}'."
+            f" Known: anthropic, openai-compat, {', '.join(sorted(PROVIDER_PRESETS))}."
+        )
+    if preset is None and not config.LLM_BASE_URL:
+        raise ValueError("LLM_PROVIDER=openai-compat requires LLM_BASE_URL.")
+    if not config.LLM_API_KEY:
+        return None
+    return OpenAICompatLLMClient(
+        api_key=config.LLM_API_KEY,
+        model=config.LLM_MODEL or (preset or {}).get("default_model"),
+        base_url=config.LLM_BASE_URL or (preset or {}).get("base_url"),
+    )

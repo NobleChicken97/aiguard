@@ -1,12 +1,18 @@
 import argparse
 import sys
 
-from agent.llm_client import ClaudeLLMClient, FakeLLMClient
+from agent.llm_client import FakeLLMClient
+from agent.llm_client import build_llm_client as build_provider_client
 from agent.orchestrator import Orchestrator
 from approval.gate import AutoApproveHandler, AutoDenyHandler, CLIApprovalHandler
-from config import ANTHROPIC_API_KEY
 from db.database import initialize_db
 from db.seed import seed_demo_data
+
+NO_KEY_HINT = (
+    "No LLM API key configured. Set LLM_PROVIDER (gemini, groq, nvidia, openai"
+    " or openai-compat) with LLM_API_KEY — or ANTHROPIC_API_KEY for the Claude"
+    " path. Use --demo for a local dry run."
+)
 
 
 def build_approval_handler(mode):
@@ -26,12 +32,10 @@ def build_llm_client(demo=False):
             FakeLLMClient.text_response("15 * 37 = 555."),
         ])
 
-    if not ANTHROPIC_API_KEY:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY is not set. Use --demo for a local dry run or configure a real Claude key."
-        )
-
-    return ClaudeLLMClient()
+    client = build_provider_client()
+    if client is None:
+        raise RuntimeError(NO_KEY_HINT)
+    return client
 
 
 def prepare_database(seed=False):
@@ -96,8 +100,8 @@ def main(argv=None):
     if args.demo:
         return run_prompt("What is 15 times 37?", args.user_id, args.approval_mode, demo=True)
 
-    if not ANTHROPIC_API_KEY:
-        print("ANTHROPIC_API_KEY is not set. Use --demo for a local dry run.", file=sys.stderr)
+    if build_provider_client() is None:
+        print(NO_KEY_HINT, file=sys.stderr)
         return 1
 
     return run_interactive(args.user_id, args.approval_mode)

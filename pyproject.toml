@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentic-guardrails"
-version = "1.6.3"
+version = "1.6.4"
 description = "Safety-first agentic system with tool use, memory, and SQL guardrails."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,6 +31,7 @@ dependencies = [
     "redis>=5.0.0",
     "psycopg2-binary>=2.9.0",
     "python-multipart>=0.0.9",
+    "openai>=1.50.0",
 ]
 
 [project.optional-dependencies]

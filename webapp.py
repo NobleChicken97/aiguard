@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 import config
-from agent.llm_client import ClaudeLLMClient
+from agent.llm_client import build_llm_client
 from agent.memory import LongTermMemory
 from agent.orchestrator import Orchestrator
 from agent.trace import get_session_trace
@@ -315,14 +315,22 @@ def _build_pending_rows():
 def _get_chat_llm_client():
     """Return the LLM client used by the chat endpoint.
 
-    In tests, ``_chat_llm_client_override`` can be set to avoid hitting the
-    real Anthropic API.
+    In tests, ``_chat_llm_client_override`` can be set to avoid hitting a
+    real provider. Misconfigured providers surface as a 400 via ValueError.
     """
     if _chat_llm_client_override is not None:
         return _chat_llm_client_override
-    if not config.ANTHROPIC_API_KEY:
-        return None
-    return ClaudeLLMClient()
+    try:
+        return build_llm_client()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+def _llm_configured():
+    try:
+        return build_llm_client() is not None
+    except ValueError:
+        return False
 
 
 def _client_ip(request: Request) -> str:
@@ -363,7 +371,7 @@ def chat_page(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="chat.html",
-        context={"request": request, "api_key_configured": bool(config.ANTHROPIC_API_KEY)},
+        context={"request": request, "llm_configured": _llm_configured()},
     )
 
 
@@ -381,7 +389,11 @@ async def chat_api(req: ChatRequest, request: Request):
     if llm_client is None:
         raise HTTPException(
             status_code=400,
-            detail="ANTHROPIC_API_KEY is not configured. Set it in your environment or .env file.",
+            detail=(
+                "No LLM API key configured. Set LLM_PROVIDER (gemini, groq,"
+                " nvidia, openai or openai-compat) with LLM_API_KEY — or"
+                " ANTHROPIC_API_KEY for the Claude path."
+            ),
         )
 
     approval_handler = (

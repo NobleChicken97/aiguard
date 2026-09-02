@@ -6,6 +6,16 @@ load_dotenv()
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
 
+# LLM provider layer (v1.6.4). ``LLM_PROVIDER`` selects the client:
+#   anthropic     — legacy Claude path (ANTHROPIC_API_KEY / CLAUDE_MODEL)
+#   gemini|groq|nvidia|openai — OpenAI-compatible presets (free tiers for
+#                   gemini/groq/nvidia); LLM_API_KEY required
+#   openai-compat — any other OpenAI-compatible endpoint via LLM_BASE_URL
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "")
+
 DB_PATH = os.getenv("DB_PATH", "data/guardrails.db")
 
 MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "15"))

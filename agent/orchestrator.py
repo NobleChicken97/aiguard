@@ -224,7 +224,10 @@ class Orchestrator:
     def _estimate_cost(self):
         from agent.budget import estimate_cost_usd
 
-        return estimate_cost_usd(self.total_input_tokens, self.total_output_tokens)
+        provider = getattr(self._budget_client, "provider", None)
+        return estimate_cost_usd(
+            self.total_input_tokens, self.total_output_tokens, provider=provider
+        )
 
     def _persist_message(self, role, content):
         from db.database import get_connection
