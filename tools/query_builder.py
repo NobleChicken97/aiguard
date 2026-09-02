@@ -42,8 +42,6 @@ FILTER_OPERATORS = ("=", "!=", ">", ">=", "<", "<=", "LIKE")
 
 _NUMERIC_TYPE_TOKENS = ("INT", "REAL", "FLOA", "DOUB", "NUM", "DEC")
 
-AGGREGATE_FUNCTIONS = ("COUNT", "SUM", "AVG", "MIN", "MAX")
-
 
 class FilterCondition(BaseModel):
     column: str

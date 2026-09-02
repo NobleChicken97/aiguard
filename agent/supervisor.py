@@ -1,4 +1,3 @@
-import json
 from agent.llm_client import ClaudeLLMClient
 from agent.workers import create_sql_worker, create_research_worker
 

@@ -1,4 +1,3 @@
-import sqlite3
 from db.database import get_connection, initialize_db
 
 

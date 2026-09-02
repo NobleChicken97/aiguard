@@ -1,7 +1,6 @@
 import uuid
 import json
 from datetime import datetime, timezone
-from typing import Optional
 
 import config
 from agent.memory import ShortTermMemory, LongTermMemory, distill_facts_from_session
@@ -243,7 +242,6 @@ class Orchestrator:
             conn.close()
 
     def _end_session(self):
-        from db.database import get_connection
 
         self.trace.log("session_end", {
             "total_input_tokens": self.total_input_tokens,

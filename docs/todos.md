@@ -115,6 +115,20 @@ The supervisor refactor left the following regressions vs documented behavior:
 - [x] **.gitignore** extended: run artifacts (`*.log`, coverage), OS/editor
   noise.
 
+## Technical-debt audit (Sep 3, 2026) — findings pending approval
+Full report: [`docs/audit-2026-09-03.md`](audit-2026-09-03.md). Highlights:
+- **P1 (behavioral)**: system prompt + LTM facts are computed in
+  `Orchestrator` but never sent to the LLM on the supervisor/worker path
+  (dead since the supervisor refactor; docs claim otherwise). Fix = small
+  behavior change, needs owner approval.
+- **P2 (zero-risk deletions)**: `TraceLogger.log_plan`/`get_events`,
+  `ContentBlock.to_message`, `FakeLLMClient.multi_tool_use_response`,
+  `ToolRegistry.list_names`, dead `config.MAX_ITERATIONS` (+ stale doc
+  mentions), dead `AGGREGATE_FUNCTIONS` constant, ~23 unused imports/locals.
+- **P3 (consolidation)**: `_now`/`_uuid` ×4 files; no-key hint string ×2.
+- **P4 (opportunistic)**: db connection helper, silent excepts → debug log,
+  `db/__init__` export trim.
+
 ## Next Up (recommended order)
 Tracked as tracer-bullet tickets in `.scratch/netsentry-vnext/issues/` (dependency-ordered; see ticket files for acceptance criteria). **Done:** 04–09, **11** (v1.6.2–v1.6.4), **01 — live-API smoke harness** (v1.6.5, live-verified 4/4 in v1.6.6). Remaining frontier:
 1. **02** Publish repo to GitHub + activate CI — **needs the owner to create the repo/remote** → gates **03** Redis-in-CI

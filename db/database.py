@@ -1,7 +1,6 @@
 import sqlite3
 import os
 import config
-from contextlib import contextmanager
 
 _pg_pool = None
 

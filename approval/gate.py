@@ -1,7 +1,6 @@
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
-from typing import Optional
 
 from db.database import get_connection
 

@@ -39,9 +39,10 @@ jobs:
           pip install -r requirements.txt ruff
       - name: Dependency consistency (pip check)
         run: pip check
-      - name: Lint for bug classes (syntax errors, undefined names, bad comparisons)
-        # Deliberately the E9/F bug subset, not style: the suite already
-        # covers behavior; this catches NameErrors a test may never reach.
+      - name: Lint for bug classes and unused code
+        # E9/F63/F7/F82 catch syntax errors, undefined names, and bad
+        # comparisons; F401/F841 keep unused imports/locals out. Behavior
+        # itself is the test suite's job.
         run: ruff check .
       - name: All app modules import cleanly
         run: python -c "import config, main, webapp, agent, tools, guardrails, approval, db, scripts"

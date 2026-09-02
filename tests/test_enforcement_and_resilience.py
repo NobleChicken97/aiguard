@@ -17,10 +17,10 @@ sys.path.insert(0, ".")
 
 from agent.llm_client import FakeLLMClient
 from agent.orchestrator import Orchestrator
-from approval.gate import AutoApproveHandler, AutoDenyHandler, CLIApprovalHandler, resolve_approval
+from approval.gate import AutoApproveHandler, AutoDenyHandler
 from db.database import get_connection, reset_db
 from db.seed import seed_demo_data
-from tools.base import Tool, ToolResult
+from tools.base import Tool
 from tools.sql_tool import SQLTool
 
 
@@ -71,7 +71,6 @@ class TestApprovalEnforcement:
         Test that multiple operations in a single response (combinations) are still blocked
         if the result is a denial.
         """
-        from tools.web_search import WebSearchTool
 
         # Create a custom handler that tracks tasks
         class TaskTrackingDenyHandler:
@@ -110,7 +109,7 @@ class TestToolFailureHandling:
         tool = FailingTool()
         # The testbed FAILS intentionally - tools should raise exceptions when encountering critical errors
         with pytest.raises(ValueError, match="This tool failed intentionally for testing"):
-            result = tool.execute()
+            tool.execute()
 
     def test_context_cleanup_on_tool_failure(self):
         """

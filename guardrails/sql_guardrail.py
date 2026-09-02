@@ -1,7 +1,6 @@
 import sqlglot
 from sqlglot import exp
 from dataclasses import dataclass
-from typing import Optional
 import config
 
 

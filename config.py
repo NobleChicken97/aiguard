@@ -18,7 +18,6 @@ LLM_MODEL = os.getenv("LLM_MODEL", "")
 
 DB_PATH = os.getenv("DB_PATH", "data/guardrails.db")
 
-MAX_ITERATIONS = int(os.getenv("MAX_ITERATIONS", "15"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 BACKOFF_BASE_SECONDS = float(os.getenv("BACKOFF_BASE_SECONDS", "1.0"))
 WORKER_MAX_ITERATIONS = int(os.getenv("WORKER_MAX_ITERATIONS", "5"))

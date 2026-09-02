@@ -59,6 +59,7 @@ filterwarnings = [
 testpaths = ["tests"]
 
 [tool.ruff.lint]
-# Bug-class subset only (syntax errors, undefined names, invalid comparisons) —
-# behavior is the test suite's job. Kept in sync with the CI static-checks job.
-select = ["E9", "F63", "F7", "F82"]
+# Bug-class subset (syntax errors, undefined names, invalid comparisons) plus
+# unused imports/locals (F401/F841) — behavior is the test suite's job.
+# Kept in sync with the CI static-checks job.
+select = ["E9", "F63", "F7", "F82", "F401", "F841"]

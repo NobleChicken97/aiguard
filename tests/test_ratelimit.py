@@ -5,9 +5,7 @@ the integration with /api/chat and /api/stream.
 """
 
 import sys
-import threading
 import time
-from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,7 +17,6 @@ from db.database import reset_db
 from db.seed import seed_demo_data
 from webapp import app
 import webapp as webapp_module
-import webapp_ratelimit
 from webapp_ratelimit import (
     ConcurrentStreamGuard,
     TokenBucket,

@@ -11,7 +11,6 @@ from agent.memory import LongTermMemory, distill_facts_from_session
 from agent.orchestrator import Orchestrator
 from db.database import reset_db
 from db.seed import seed_demo_data
-from guardrails.pii_guardrail import PIIGuardrail
 
 
 def test_fallback_without_llm_still_extracts_user_messages():

@@ -3,7 +3,7 @@ from collections import OrderedDict
 import threading
 
 from tools.base import Tool, ToolResult
-from guardrails.sql_guardrail import SQLGuardrail, VERDICT_BLOCKED, VERDICT_REQUIRES_APPROVAL, VERDICT_ALLOWED
+from guardrails.sql_guardrail import SQLGuardrail, VERDICT_REQUIRES_APPROVAL, VERDICT_ALLOWED
 from guardrails.pii_guardrail import PIIGuardrail
 from db.database import get_connection
 import config

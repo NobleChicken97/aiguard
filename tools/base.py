@@ -65,9 +65,6 @@ class ToolRegistry:
     def get_schemas(self):
         return [tool.to_schema() for tool in self._tools.values()]
 
-    def list_names(self):
-        return list(self._tools.keys())
-
 
 def execute_with_retry(tool, kwargs, call_id, trace=None):
     """Execute a tool with bounded retries and exponential backoff.

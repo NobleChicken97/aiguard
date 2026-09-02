@@ -1,7 +1,6 @@
 import uuid
 import json
 from datetime import datetime, timezone
-from typing import Any, Optional
 
 from db.database import get_connection
 
@@ -35,12 +34,6 @@ class TraceLogger:
             (_uuid(), self.session_id, event_type, json.dumps(data, default=str), _now()),
         )
         self.conn.commit()
-
-    def log_plan(self, plan_text, messages_snapshot=None):
-        self.log("plan", {
-            "plan": plan_text,
-            "message_count": len(messages_snapshot) if messages_snapshot else None,
-        })
 
     def log_tool_call(self, tool_name, tool_input, call_id=None):
         self.log("tool_call", {
@@ -93,22 +86,6 @@ class TraceLogger:
             "attempt": attempt,
             "reason": reason,
         })
-
-    def get_events(self):
-        conn = get_connection()
-        try:
-            rows = conn.execute(
-                "SELECT trace_id, event_type, data, timestamp FROM app_trace_events WHERE session_id = ? ORDER BY timestamp ASC",
-                (self.session_id,),
-            ).fetchall()
-            events = []
-            for r in rows:
-                d = dict(r)
-                d["data"] = json.loads(d["data"])
-                events.append(d)
-            return events
-        finally:
-            conn.close()
 
     def close(self):
         if self._conn:

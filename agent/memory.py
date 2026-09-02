@@ -1,7 +1,7 @@
 import uuid
 import json
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 from db.database import get_connection
 
@@ -142,7 +142,6 @@ def distill_facts_from_session(messages, llm_client=None):
     ]
 
     if llm_client is not None and user_messages:
-        from agent.llm_client import FakeLLMClient
         conversation = "\n".join(m["content"] for m in user_messages)
         try:
             response = llm_client.call(

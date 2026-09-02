@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 import config
 
@@ -72,9 +72,6 @@ class LLMResponse:
     def tool_calls(self):
         return [b for b in self.content if b.type == "tool_use"]
 
-    def to_message(self):
-        return {"role": "assistant", "content": [b.to_dict() for b in self.content]}
-
 
 class ClaudeLLMClient:
     """Anthropic Claude client used by the orchestrator and workers.
@@ -131,7 +128,6 @@ class FakeLLMClient:
     def __init__(self, responses, route_decision="SQL", distill_facts=None):
         self._responses = list(responses)
         self._index = 0
-        self.call_count = 0
         self.route_decision = route_decision
         self.distill_facts = distill_facts
 
@@ -164,7 +160,6 @@ class FakeLLMClient:
             )
         resp = self._responses[self._index]
         self._index += 1
-        self.call_count += 1
         return resp
 
     @staticmethod
@@ -191,25 +186,6 @@ class FakeLLMClient:
             ],
             input_tokens=10,
             output_tokens=30,
-        )
-
-    @staticmethod
-    def multi_tool_use_response(calls):
-        content = [ContentBlock(type="text", text="Let me use multiple tools.")]
-        for name, inp, uid in calls:
-            content.append(
-                ContentBlock(
-                    type="tool_use",
-                    tool_use_id=uid,
-                    tool_name=name,
-                    tool_input=inp,
-                ),
-            )
-        return LLMResponse(
-            stop_reason="tool_use",
-            content=content,
-            input_tokens=10,
-            output_tokens=40,
         )
 
 

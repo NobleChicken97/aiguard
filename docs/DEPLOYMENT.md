@@ -157,7 +157,6 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - DB_PATH=${DB_PATH:-/app/data/guardrails.db}
       - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-20250514}
-      - MAX_ITERATIONS=${MAX_ITERATIONS:-15}
       - SESSION_COST_BUDGET_USD=${SESSION_COST_BUDGET_USD:-0.50}
     volumes:
       - ./data:/app/data
@@ -248,7 +247,6 @@ docker-compose exec api cp /app/data/guardrails.db /app/data/guardrails.db.backu
    - `ANTHROPIC_API_KEY`: Your Claude API key
    - `DEMO_MODE`: Leave empty
    - (Optional) `SESSION_COST_BUDGET_USD`: `0.10` for safety
-   - (Optional) `MAX_ITERATIONS`: `10`
 
 5. **Configure Database** (Optional)
    - Use Render Postgres for persistent storage
@@ -530,8 +528,6 @@ RISKY_ROW_THRESHOLD=10
 SESSION_COST_BUDGET_USD - max cost per session
 SESSION_COST_BUDGET_USD=0.05
 
-MAX_ITERATIONS - maximum orchestration steps
-MAX_ITERATIONS=10
 ```
 
 ### Adding Sign-up/Authentication
@@ -660,7 +656,6 @@ REDIS_URL=redis://localhost:6379/0  # Optional; short-term memory sync (graceful
 WORKER_MAX_ITERATIONS=5  # Max LLM iterations per worker task
 
 # Safety & Limits
-MAX_ITERATIONS=15  # Max orchestration steps before auto-fail
 MAX_RETRIES=3  # Max retry attempts for tool failures
 BACKOFF_BASE_SECONDS=1.0  # Base backoff delay (seconds)
 RISKY_ROW_THRESHOLD=5  # Row count requiring approval

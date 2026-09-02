@@ -11,7 +11,6 @@ Covers:
 import sys
 import threading
 
-import pytest
 
 sys.path.insert(0, ".")
 

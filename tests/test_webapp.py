@@ -14,7 +14,7 @@ sys.path.insert(0, ".")
 from agent.llm_client import FakeLLMClient
 from agent.memory import LongTermMemory
 from agent.orchestrator import Orchestrator
-from approval.gate import AutoApproveHandler, WebApprovalHandler
+from approval.gate import AutoApproveHandler
 from db.database import get_connection, reset_db
 from db.seed import seed_demo_data
 from webapp import app

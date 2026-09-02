@@ -95,7 +95,7 @@ def health_check():
     try:
         rows = conn.execute("SELECT COUNT(*) AS cnt FROM app_sessions").fetchone()
         db_ok = True
-    except Exception as e:
+    except Exception:
         rows = {"cnt": 0}
         db_ok = False
     finally:
