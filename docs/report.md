@@ -95,7 +95,8 @@ The project test suite covers all safety, resilience, and integration paths:
 | Memory distillation & PII masking (v1.6.1) | 4 tests | 100% |
 | Fact deletion, approval CSRF, builder audit (v1.6.2) | 6 tests | 100% |
 | Builder aggregates, FK joins, session lifecycle (v1.6.3) | 22 tests | 100% |
-| **Total** | **175 tests** | **100% (167 without PG)** |
+| OpenAI-compatible provider layer (v1.6.4) | 20 tests | 100% |
+| **Total** | **195 tests** | **100% (187 without PG)** |
 
 ### Adversarial guardrail effectiveness
 
@@ -124,6 +125,16 @@ All 22 destructive SQL attempts across 17 adversarial prompts are blocked before
 
 ### Version history
 
+- **v1.6.4** (Sep 2026) — Free-tier LLM provider layer:
+  - `LLM_PROVIDER` selects the client: anthropic (legacy default) or
+    OpenAI-compatible providers — gemini, groq, nvidia, openai presets and
+    `openai-compat` for any custom base URL — no Anthropic key required
+  - One adapter (`OpenAICompatLLMClient`) translates tool schemas, messages,
+    tool calls/results, and usage onto the existing `LLMResponse` contract;
+    supervisor/worker loops, budgets, traces unchanged
+  - Provider-aware budget: free tiers estimate $0 (token budget binds);
+    `BUDGET_RATE_CARD_USD_PER_M` overrides for paid tiers
+  - Test suite: 175 → 195 (187 pass without PG, 8 PG-gated)
 - **v1.6.3** (Sep 2026) — Builder analytics + session lifecycle:
   - Visual builder gains aggregates (`COUNT/SUM/AVG/MIN/MAX`), group-by,
     and FK-based joins built only from declared foreign keys; outputs are

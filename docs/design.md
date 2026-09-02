@@ -155,6 +155,15 @@ Alternatives:
 
 Why this won: the dashboard stat reflects reality during and shortly after a conversation, resume is never contradictory, and stale rows age out of the active count without a cleanup job. `session_end` remains a trace event marking the end of a turn, not a row state.
 
+### 9) Chosen: provider-agnostic LLM client (v1.6.4)
+What was chosen: an OpenAI-compatible chat-completions adapter (`agent/llm_client.py::OpenAICompatLLMClient`) behind the existing `LLMResponse` contract, selected by a `build_llm_client()` factory from `LLM_PROVIDER` — `anthropic` (default, legacy), `gemini`/`groq`/`nvidia`/`openai` presets, or `openai-compat` with an explicit `LLM_BASE_URL`.
+
+Alternatives:
+- Keep the Anthropic-only client — caps the project behind one paid key.
+- One bespoke SDK client per provider — N clients to maintain for an identical wire shape.
+
+Why this won: Gemini, Groq, and NVIDIA all expose OpenAI-compatible chat endpoints with function calling (verified against provider docs, Sep 2026), so a single translation layer (tool schemas, messages incl. tool calls/results, usage) serves every free-tier provider, and the supervisor/worker loops, budgets, and traces work unchanged. Budget note: free-tier providers estimate $0 cost, so `SESSION_MAX_TOKENS` is the binding limit unless `BUDGET_RATE_CARD_USD_PER_M` supplies list prices.
+
 ## Known limitations and deferred hardening
 - The policy engine is intentionally conservative and schema-specific; it is not a generic SQL security product.
 - The project does not attempt deep semantic validation of every business rule; it focuses on execution boundaries and explicit approvals.

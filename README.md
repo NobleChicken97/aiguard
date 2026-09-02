@@ -12,7 +12,11 @@ A production-ready agentic orchestration system that safely executes SQL queries
 # Install dependencies
 pip install -r requirements.txt
 
-# Set your Anthropic API key
+# Point the agent at a free-tier provider (no credit card needed):
+export LLM_PROVIDER="gemini"        # or "groq", "nvidia", "openai", "openai-compat"
+export LLM_API_KEY="your-free-key"  # AI Studio key for gemini, console.groq.com for groq
+
+# ...or the legacy Claude path
 export ANTHROPIC_API_KEY="sk-ant-..."
 
 # Run in interactive mode
@@ -113,7 +117,7 @@ Continue Loop
 ```
 
 ### Tech Stack
-- **LLM**: Claude API with native tool-use (function calling)
+- **LLM**: provider-agnostic with native tool-use — Anthropic Claude, or free-tier OpenAI-compatible providers (Gemini 2.5 Flash, Groq/Llama, NVIDIA NIM) via `LLM_PROVIDER`
 - **SQL Parsing**: `sqlglot` for AST-level analysis (not regex)
 - **Database**: SQLite for local dev, Postgres compatible
 - **API**: FastAPI with Jinja2 templating
@@ -197,7 +201,7 @@ docker-compose up --build
 1. Push to GitHub (or use Gitpod codespaces)
 2. Deploy as Python app from root directory
 3. Set environment variables:
-   - `ANTHROPIC_API_KEY`: Your Claude API key
+   - `LLM_PROVIDER` + `LLM_API_KEY` (e.g. `gemini` + an AI Studio key — free tier works)
    - `DB_PATH`: Leave default or set to persistent storage
 4. Start with `uvicorn webapp:app --host 0.0.0.0 --port $PORT`
 
@@ -314,9 +318,16 @@ Response:
 ### Environment Variables
 
 ```env
-ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_API_KEY=sk-ant-...        # legacy Claude path (LLM_PROVIDER=anthropic)
 
-# LLM Settings
+# LLM Provider (v1.6.4) — free-tier friendly
+LLM_PROVIDER=gemini                 # anthropic | gemini | groq | nvidia | openai | openai-compat
+LLM_API_KEY=your-free-key           # required for non-anthropic providers
+LLM_MODEL=gemini-2.5-flash          # optional; preset default otherwise
+LLM_BASE_URL=                       # optional; required for openai-compat
+BUDGET_RATE_CARD_USD_PER_M=         # optional in,out USD per M tokens for cost estimates
+
+# LLM Settings (Claude path)
 CLAUDE_MODEL=claude-sonnet-4-20250514
 
 # Database
@@ -455,7 +466,7 @@ def check(self, sql):
 | Design | `docs/design.md` | Technical design and trade-offs |
 | Build Plan | `docs/plan.md` | Phased build plan and MVP cut line |
 | Deployment | `docs/DEPLOYMENT.md` | Docker, Render, Railway, AWS deployment |
-| Test Results | `docs/report.md` | 175-test suite, 100% adversarial block rate |
+| Test Results | `docs/report.md` | 195-test suite, 100% adversarial block rate |
 | API | `webapp.py` | FastAPI endpoints and templates |
 | Config | `config.py` | Application configuration |
 | Tests | `tests/` | Adversarial test suites (17 prompts) |

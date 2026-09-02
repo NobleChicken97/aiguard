@@ -73,10 +73,11 @@ The supervisor refactor left the following regressions vs documented behavior:
   8 PG-gated).
 
 ## Next Up (recommended order)
-Tracked as tracer-bullet tickets in `.scratch/netsentry-vnext/issues/` (dependency-ordered; see ticket files for acceptance criteria). **Done:** 04 (approval CSRF), 05 (memory fact deletion), 06 (builder aggregates/GROUP BY), 07 (builder FK joins), 08 (builder audit rows), 09 (session lifecycle) — all in v1.6.2/v1.6.3. Remaining frontier:
-1. **01** Live-API smoke harness — **needs an `ANTHROPIC_API_KEY`** (none configured; no `.env` exists)
+Tracked as tracer-bullet tickets in `.scratch/netsentry-vnext/issues/` (dependency-ordered; see ticket files for acceptance criteria). **Done:** 04–09 (v1.6.2/v1.6.3) and **11 — free-tier provider layer** (v1.6.4: `LLM_PROVIDER=gemini|groq|...` + `LLM_API_KEY` runs the whole agent without an Anthropic key). Remaining frontier:
+1. **01** Live-API smoke harness — **needs a free LLM key** (`LLM_PROVIDER=gemini` + AI Studio key, or `groq` + console.groq.com key) — the provider layer it exercises is already merged
 2. **02** Publish repo to GitHub + activate CI — **needs the owner to create the repo/remote** → gates **03** Redis-in-CI
-3. **10** Supervisor routing spike — LLM-vs-keyword accuracy measurement **needs a key**; the deterministic prefilter could be built without it if decided
+3. **10** Supervisor routing spike — measurable with any configured free key
+
 
 
 

@@ -1,8 +1,8 @@
 # Project Progress Tracking
 
-**Overall Status**: ✅ Phases 1-9 COMPLETE · ✅ v1.6.0 Hardening · ✅ v1.6.1 Correctness · ✅ v1.6.2 Security & Auditability · ✅ v1.6.3 Builder Analytics + Session Lifecycle
+**Overall Status**: ✅ Phases 1-9 COMPLETE · ✅ v1.6.0 Hardening · ✅ v1.6.1 Correctness · ✅ v1.6.2 Security & Auditability · ✅ v1.6.3 Builder Analytics + Session Lifecycle · ✅ v1.6.4 Free-Tier Provider Layer
 
-> Last verified against code: September 1, 2026 — **167/167 tests passing without PostgreSQL** (8 PG-gated skip; 175 collected in total).
+> Last verified against code: September 2, 2026 — **187/187 tests passing without PostgreSQL** (8 PG-gated skip; 195 collected in total).
 
 ## Phase 1 — Orchestrator + Tools
 **Status:** ✅ Completed
@@ -136,6 +136,35 @@
   supervisor refactor).
 - **Test suite grew from 87 → 131 tests** (123 pass without PG,
   8 PG-gated, 1 deprecation warning).
+
+## v1.6.4 — Free-Tier LLM Provider Layer (Sep 2, 2026)
+**Status:** ✅ Completed
+
+No Anthropic key required anymore. `LLM_PROVIDER` selects the client
+(provider research + doc verification in the session log):
+
+1. **`agent/llm_client.py::OpenAICompatLLMClient`** — OpenAI-compatible
+   chat-completions adapter that translates tool schemas, messages
+   (assistant tool_use blocks ↔ `tool_calls`, user tool_result blocks ↔
+   `role:"tool"`), responses (`finish_reason`/tool_calls ↔ `stop_reason`/
+   ContentBlocks), and usage onto the existing `LLMResponse` contract. The
+   supervisor/worker loops, budgets, and traces work unchanged.
+2. **Presets**: `gemini` (generativelanguage.googleapis.com/v1beta/openai,
+   gemini-2.5-flash), `groq` (api.groq.com/openai/v1,
+   llama-3.3-70b-versatile), `nvidia`, `openai`, plus `openai-compat` for
+   any custom base URL. `build_llm_client()` factory: anthropic default
+   (ANTHROPIC_API_KEY), others need LLM_API_KEY; missing keys return None
+   (the webapp answers 400), misconfigurations raise clear ValueErrors.
+3. **Provider-aware budget**: `estimate_cost_usd(provider=...)` — free-tier
+   providers estimate $0 so `SESSION_MAX_TOKENS` binds;
+   `BUDGET_RATE_CARD_USD_PER_M=in,out` overrides for paid-tier estimates.
+   No invented per-provider prices.
+4. **Wiring**: `main.py` and `webapp.py` use the factory; the no-key chat
+   error and the `/chat` page flag are provider-neutral. `openai>=1.50`
+   added as a dependency.
+
+Test suite: 175 → 195 tests (187 pass without PG, 8 PG-gated), including a
+full SQLWorker tool loop proven against a stubbed OpenAI-compatible client.
 
 ## v1.6.3 — Builder Analytics & Session Lifecycle (Sep 1, 2026)
 **Status:** ✅ Completed
