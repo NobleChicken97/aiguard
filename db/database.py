@@ -66,8 +66,15 @@ class PGConnectionWrapper:
         return cursor
 
     def executescript(self, sql):
+        # psycopg2's cursor.execute() only supports a single statement per call
+        # (extended query protocol limitation). Split on semicolons and execute
+        # each statement individually so multi-statement scripts (like schema
+        # creation) work correctly.
         cursor = self.conn.cursor()
-        cursor.execute(sql)
+        for statement in sql.split(";"):
+            statement = statement.strip()
+            if statement:
+                cursor.execute(statement)
         return cursor
 
     def commit(self):
