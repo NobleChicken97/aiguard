@@ -84,7 +84,7 @@ class BudgetGuardedLLMClient:
                     f"Session cost budget exceeded: ${cost:.4f} > ${config.SESSION_COST_BUDGET_USD:.2f}"
                 )
 
-        if self.total_tokens > config.SESSION_MAX_TOKENS:
+        if config.SESSION_MAX_TOKENS > 0 and self.total_tokens > config.SESSION_MAX_TOKENS:
             raise BudgetExceededError(
                 f"Session token budget exceeded: {self.total_tokens} > {config.SESSION_MAX_TOKENS}"
             )

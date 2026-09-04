@@ -24,7 +24,7 @@ WORKER_MAX_ITERATIONS = int(os.getenv("WORKER_MAX_ITERATIONS", "5"))
 
 RISKY_ROW_THRESHOLD = int(os.getenv("RISKY_ROW_THRESHOLD", "5"))
 
-SESSION_COST_BUDGET_USD = float(os.getenv("SESSION_COST_BUDGET_USD", "0"))
+SESSION_COST_BUDGET_USD = float(os.getenv("SESSION_COST_BUDGET_USD", "0.50"))
 
 # A session counts as "active" (dashboard stat) while it had activity within
 # this many minutes; it is never marked ended just because a turn finished.

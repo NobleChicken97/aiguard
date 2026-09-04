@@ -25,3 +25,6 @@ Thumbs.db
 # graphify generated outputs
 graphify-out/
 .graphify_*
+
+# agent harness config (local-only, not project source)
+.commandcode/
