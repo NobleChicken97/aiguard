@@ -148,9 +148,9 @@ class TestToolFailureHandling:
         fake_llm = FakeLLMClient([
             FakeLLMClient.tool_use_response("calculator", {"expression": "15 * 37"}, "toolu_multi_1"),
             FakeLLMClient.text_response("Let me verify with search"),
-            FakeLLMClient.tool_use_response("web_search", {"query": "15 times 37 result"}, "toolu_multi_2"),
+            FakeLLMClient.tool_use_response("mock_web_search", {"query": "15 times 37 result"}, "toolu_multi_2"),
             FakeLLMClient.text_response("OK, so 15 * 37 is 555."),
-        ])
+        ], route_decision="RESEARCH")
 
         orchestrator = Orchestrator(
             llm_client=fake_llm,
@@ -223,7 +223,7 @@ class TestIntegrationScenarios:
 
     def test_normal_operations_not_affected_by_enforcement_tests(self):
         """
-        Test that normal calculator and web search operations work normally.
+        Test that normal calculator and mock web search operations work normally.
         This verifies that enforcement tests don't pollute the normal code path.
         """
         fake_llm = FakeLLMClient([
@@ -251,9 +251,9 @@ class TestIntegrationScenarios:
         fake_llm = FakeLLMClient([
             FakeLLMClient.tool_use_response("calculator", {"expression": "15 * 37"}, "toolu_combo_1"),
             FakeLLMClient.text_response("Ok, calculator result is 555"),
-            FakeLLMClient.tool_use_response("web_search", {"query": "15 times 37 information"}, "toolu_combo_2"),
+            FakeLLMClient.tool_use_response("mock_web_search", {"query": "15 times 37 information"}, "toolu_combo_2"),
             FakeLLMClient.text_response("Confirmed: 15 x 37 = 555"),
-        ])
+        ], route_decision="RESEARCH")
 
         orchestrator = Orchestrator(
             llm_client=fake_llm,
@@ -299,9 +299,9 @@ class TestErrorScenarioCategories:
         Test that data formatting errors in tool results are handled properly.
         """
         fake_llm = FakeLLMClient([
-            FakeLLMClient.tool_use_response("web_search", {"query": "test search"}, "toolu_format_1"),
+            FakeLLMClient.tool_use_response("mock_web_search", {"query": "test search"}, "toolu_format_1"),
             FakeLLMClient.text_response("Search test result"),
-        ])
+        ], route_decision="RESEARCH")
 
         orchestrator = Orchestrator(
             llm_client=fake_llm,

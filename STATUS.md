@@ -145,3 +145,14 @@ Shipped, full suite green: **285 passed (275 + 10 new), 10 skipped**; ruff + pip
 2. **Contract change recorded**: 2 v1.6.1 tests updated with comments (empty + "RESEARCH (not SQL)" now clarify instead of default-SQL/first-token). FakeLLM clean-token defaults unaffected.
 3. **Eval**: `scripts/router_eval.py`, 40 hand-written cases (20/20), exit-code release semantics (bar 0.80), skips cleanly without a key; metric math pinned hermetically in `tests/test_router_eval.py`.
 4. **Live number (groq/openai/gpt-oss-120b)**: **97.5% (39/40), 0 deferred, all structured tier**. The one miss is instructive, not noise: "Who lives in Chicago?" → ResearchWorker at high confidence — the prompt reads as general knowledge without DB cue words, i.e. MY eval case wasn't crisp, the router was decisively wrong on an ambiguous phrasing. Kept as-is deliberately (tuning the set to 100% would game the metric); lowering the bar cases' ambiguity is future work, tracked by the number itself.
+
+## Phase 5 — Web search honestly mocked (2026-09-04)
+
+Decision (user): explicit mock now; live integration needs a provider key nobody has on hand.
+
+1. Renamed `WebSearchTool` → `MockWebSearchTool`, tool name `web_search` → `mock_web_search` (visible in traces + dashboard tool table). The old export is gone (`tools.WebSearchTool` raises AttributeError — pinned by test).
+2. Labeled everywhere live: `DEMO STUB — canned results, never claim live browsing` in the LLM-facing description, worker instructions, and `SYSTEM_PROMPT` (model honesty, not just UI honesty); chat UI banner (Phase 0.5); README dispatcher line; design/plan/report notes; module + class docstrings with the future Tavily/Brave seam documented (env shape, caps, spend guard).
+3. Deliberately NOT renamed: the module file `tools/web_search.py` (import churn + history for zero user-visible gain; its docstring leads with the stub label) and the historical progress/STATUS entries (they describe past states accurately).
+4. Enforcement tests now route RESEARCH so the mock genuinely executes (previously "tool not found" vacuously).
+5. **Tests**: `test_websearch_mock.py` (6 contract tests). Full suite below.
+6. Ops note: this box's C: drive hit 0 bytes free mid-phase (4.6GB reclaimed via `pip cache purge`); the E-errors were SQLite/ruff failing on a full disk, not code. Watch disk before long runs.

@@ -2,7 +2,7 @@ import config
 from approval.gate import ApprovalPending
 from tools.base import ToolRegistry, execute_with_retry
 from tools.calculator import CalculatorTool
-from tools.web_search import WebSearchTool
+from tools.web_search import MockWebSearchTool
 from tools.sql_tool import SQLTool
 from agent.llm_client import ClaudeLLMClient
 
@@ -119,11 +119,11 @@ def create_sql_worker(approval_handler=None, llm_client=None):
 
 def create_research_worker(llm_client=None):
     registry = ToolRegistry()
-    registry.register(WebSearchTool())
+    registry.register(MockWebSearchTool())
     registry.register(CalculatorTool())
     return WorkerBase(
         name="ResearchWorker",
-        description="You perform web searches and calculations to answer general queries or do math. Do not mention the database.",
+        description="You perform calculations and mock web searches (canned demo results — never claim live browsing) to answer general queries or do math. Do not mention the database.",
         tools=registry,
         llm_client=llm_client
     )

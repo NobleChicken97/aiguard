@@ -74,7 +74,7 @@ Only generate SQL against these tables.
 """
 
 SYSTEM_PROMPT = """\
-You are a helpful AI assistant with access to tools: a calculator, a web search, and a SQL database tool.
+You are a helpful AI assistant with access to tools: a calculator, a demo web-search stub (canned results — never claim live browsing), and a SQL database tool.
 
 When the user asks a question that requires database access, use the sql_tool to query the e-commerce database.
 Always generate valid SQLite-compatible SQL.

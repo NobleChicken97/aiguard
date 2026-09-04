@@ -1,3 +1,20 @@
+"""Canned demo search stub — explicitly a mock (Phase 5), not a roadmap item.
+
+``MockWebSearchTool`` returns fixed results for two demo queries and
+generic placeholder results otherwise. Keeping a stub is INTENTIONAL
+scope-limiting for this project (its safety story is the database path),
+and it is labeled as a mock in the class name, the tool name, the
+LLM-facing description, the chat UI, and the README — no code path may
+present its output as live research.
+
+Future live-integration seam (when a provider key exists): replace this
+class with an httpx client that POSTs ``{"query": ...}`` to Tavily
+(``SEARCH_API_URL=https://api.tavily.com/search`` with
+``SEARCH_API_KEY``) or Brave, caps results per call, enforces a monthly
+spend guard next to the session budgets, and keeps this canned class
+behind a ``SEARCH_API_KEY``-unset fallback for offline demos/tests.
+"""
+
 from tools.base import Tool, ToolResult
 
 
@@ -26,12 +43,18 @@ _MOCK_RESULTS = [
 ]
 
 
-class WebSearchTool(Tool):
+class MockWebSearchTool(Tool):
+    """Demo search stub: deterministic canned results, never live data."""
+
     def get_name(self):
-        return "web_search"
+        return "mock_web_search"
 
     def get_description(self):
-        return "Search the web for information. Returns a list of results with title, URL, and snippet."
+        return (
+            "DEMO STUB — canned results, not live web data. Never claim to "
+            "have browsed the web. Returns a list of canned results with "
+            "title, URL, and snippet."
+        )
 
     def get_input_schema(self):
         return {

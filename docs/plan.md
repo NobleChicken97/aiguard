@@ -8,7 +8,7 @@
 - approval/ — approval/request gate implementations
 - db/ — database setup, schema, migrations, and seeding
 - guardrails/ — SQL and PII policy enforcement
-- tools/ — SQL, calculator, web search, and query builder implementations
+- tools/ — SQL, calculator, mock web search (demo stub), and query builder implementations
 - ui/templates/ — dashboard, chat, approval, memory, and trace UIs
 - tests/ — pytest coverage for guardrails, resilience, and integration
 - docs/ — project summary and working logs

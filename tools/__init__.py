@@ -16,7 +16,7 @@ from tools.query_builder import (
     run_builder_query,
 )
 from tools.sql_tool import SQLTool
-from tools.web_search import WebSearchTool
+from tools.web_search import MockWebSearchTool
 
 __all__ = [
     # Base
@@ -28,7 +28,7 @@ __all__ = [
     "CalculatorTool",
     "safe_eval",
     "SQLTool",
-    "WebSearchTool",
+    "MockWebSearchTool",
     # Query builder
     "FilterCondition",
     "QueryBuilderError",

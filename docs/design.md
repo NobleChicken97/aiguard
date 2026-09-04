@@ -22,7 +22,7 @@ Orchestrator
     |       |             +--> DB (SQLite by default, Postgres optional)
     |       |
     |       +--> ResearchWorker
-    |               +--> WebSearchTool / CalculatorTool
+    |               +--> MockWebSearchTool / CalculatorTool
     |
     +--> Short-term memory + Long-term memory
     +--> Trace logger
@@ -62,7 +62,7 @@ Determines whether a task is best handled by the SQL worker or the research work
 Responsible for database-oriented tasks. It uses the SQL tool and stays within the approved schema and policy envelope.
 
 ### ResearchWorker
-Handles general reasoning tasks using calculator and web search tools. It is intentionally prevented from touching the database path.
+Handles general reasoning tasks using calculator and mock web-search stub tools. It is intentionally prevented from touching the database path.
 
 ### SQLTool
 The execution layer for database access. It validates the generated SQL against the policy layer, runs the actual query, and formats the result to keep it safe and readable.

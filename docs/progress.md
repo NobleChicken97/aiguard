@@ -425,6 +425,17 @@ Per the approved design (short-poll, DB-backed, Redis optional):
 6. **Tests**: 8 new pause/resume tests; e2e/timeout suites rewritten off threads. Full suite: **275 passed / 10 skipped**; ruff + pip check clean.
 7. Follow-ups: resume-row janitor, resume token-accounting restart, login CSRF.
 
+## Phase 5 — Web Search Honestly Mocked (Sep 4, 2026)
+**Status:** ✅ Completed
+
+Per the approved fork (explicit mock; live needs a key nobody has):
+
+1. `WebSearchTool` → `MockWebSearchTool`, tool `web_search` → `mock_web_search`; old export removed.
+2. Mock labeled in class/tool/description/worker/system-prompt/UI/README/docs; future Tavily/Brave seam documented in the module docstring.
+3. Enforcement tests now execute the mock via RESEARCH routing.
+4. `test_websearch_mock.py` (6 contract tests). Full suite numbers below.
+5. Ops: C: hit 0 bytes free mid-phase (fixed via pip cache purge); historical progress entries above predate the rename and are left intact deliberately.
+
 ## Phase 4 — Confidence-Gated Routing (Sep 4, 2026)
 **Status:** ✅ Completed
 

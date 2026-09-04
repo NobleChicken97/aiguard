@@ -95,7 +95,7 @@ Orchestrator (Plan → Act → Observe → Repeat)
     ↓
 LLM Decision (tool_call / final_answer)
     ↓
-Tool Dispatcher ([calculator, web_search, sql_tool])
+Tool Dispatcher ([calculator, mock_web_search (demo stub: canned results, not live web), sql_tool])
     ↓
 If sql_tool:
     ↓

@@ -54,7 +54,7 @@ A second layer in `guardrails/pii_guardrail.py` masks email and phone values in 
 The tool registry is intentionally small and constrained:
 - `tools/sql_tool.py` executes guarded SQL reads and writes
 - `tools/calculator.py` handles arithmetic
-- `tools/web_search.py` handles search-style tasks
+- `tools/web_search.py` handles search-style tasks (demo stub — canned results, intentionally not a live API; see Phase 5)
 - `tools/query_builder.py` can help assemble SELECT queries safely when needed by a human
 
 ### UI and observability
