@@ -156,3 +156,22 @@ Decision (user): explicit mock now; live integration needs a provider key nobody
 4. Enforcement tests now route RESEARCH so the mock genuinely executes (previously "tool not found" vacuously).
 5. **Tests**: `test_websearch_mock.py` (6 contract tests). Full suite below.
 6. Ops note: this box's C: drive hit 0 bytes free mid-phase (4.6GB reclaimed via `pip cache purge`); the E-errors were SQLite/ruff failing on a full disk, not code. Watch disk before long runs.
+
+## Before / after — the whole arc (Phase 7)
+
+| # | Before | After | Proof |
+|---|---|---|---|
+| 0 | Test counts, no coverage; unknown defaults/stubs/backlog | 90% per-module coverage; STATUS.md as source of truth | `STATUS.md` §1–§4 |
+| 0.5 | Fail-open cost default; misleading token comment; silent mock; dirty tree | $0.50 default; 0=unlimited in code; UI stub banner; clean tree | 31 targeted tests |
+| 1 | Client-trusted user_id; dead memory prompt; no login | HMAC auth, 7-table isolation, facts reach the LLM | 19-test `test_authz.py` |
+| 2 | Table-only guardrail; unbounded INSERT; regex-only PII; silent stub | Column policy, INSERT gate, anomaly log, measured NER | 51 new tests |
+| 3 | Approval held a thread up to 300s; Redis untested; dead-Redis 2–4s stalls | 202 in ~80ms + resume; Redis in CI; bounded Redis with verdict cache | 30/30 load in 1.9s |
+| 4 | First-token routing, garbage → guess-SQL | JSON + 0.6 gate, garbage → clarify, traced reasoning | 97.5% live eval |
+| 5 | Silent search stub next to a real DB tool | `MockWebSearchTool` labeled in 7 surfaces; live seam designed | 6 contract tests |
+| 6 | Text logs, shallow health, no metrics, no secrets doc | `/metrics`, `LOG_FORMAT=json`, `/health/detailed`, secrets path | `test_observability.py` |
+| 7 | No stranger-readable state | This table + README limitations + `docs/DEMO.md` | — |
+| T03 | Redis path never exercised | CI service + gated suite | green `test-sqlite` |
+| T10 | "LLM router costs a call" open question | Spike: prefilter 36/37 @ $0 vs LLM 39/40; LLM kept, rationale filed | `design.md` §10 |
+| T02 | Unpushed, placeholder badge, red CI | Pushed, real badge, all gates green (incl. PG) | CI run history |
+
+Still human: external adversarial-5 prompts, demo video recording, optional `LLM_API_KEY` repo secret (enables manual live-smoke gate).

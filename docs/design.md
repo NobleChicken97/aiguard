@@ -168,6 +168,18 @@ Alternatives:
 
 Why this won: Gemini, Groq, and NVIDIA all expose OpenAI-compatible chat endpoints with function calling (verified against provider docs, Sep 2026), so a single translation layer (tool schemas, messages incl. tool calls/results, usage) serves every free-tier provider, and the supervisor/worker loops, budgets, and traces work unchanged. Budget note: free-tier providers estimate $0 cost, so `SESSION_MAX_TOKENS` is the binding limit unless `BUDGET_RATE_CARD_USD_PER_M` supplies list prices.
 
+### 10) Chosen: LLM router over a deterministic keyword prefilter (ticket 10 spike, Sep 2026)
+
+What was chosen: keep the LLM router (structured JSON + confidence gate, Phase 4) as the only routing mechanism.
+
+Alternatives spiked: a deterministic keyword prefilter (DB-entity words → SQL, research phrasing → RESEARCH, else abstain to the LLM), measured on the same 40-case eval set (`scripts/router_eval.py` CASES).
+
+Numbers: prefilter 36/37 on decided (97.3%), 3 abstentions, 0.0ms, $0 — vs LLM router 39/40 live (97.5%), 0 abstentions, ~1-2s + fractions of a cent per call. A hybrid (prefilter-first, LLM fallback) caps at ~95%: it inherits the prefilter's confident miss ("price of Bitcoin" collides with the product-price keyword) while the LLM alone gets it right.
+
+Why the LLM won: +0.2pp accuracy, zero keyword lists to rot as the schema grows (every new table/column would need list maintenance — the exact trap the allow-list already covers structurally), and self-describing `reasoning` traces for misroute debugging. The prefilter's speed is real but saves nothing that matters (turns take seconds anyway). Revisit only if routing cost/latency ever dominates a profile — it currently doesn't. Notably the prefilter abstained on "Who lives in Chicago?" (the LLM's one confident miss), which independently confirms abstention-on-ambiguity as the right shape; the confidence gate already implements it.
+
+The ticket's other alternative — collapsing the supervisor into a single worker owning all tools — was rejected without a spike: worker separation is now a safety boundary (the ResearchWorker provably cannot reach `sql_tool`, asserted by the no-DB-access smoke checks), and collapsing it would trade an isolation guarantee for one fewer LLM call. Not worth it.
+
 ## Known limitations and deferred hardening
 - The policy engine is intentionally conservative and schema-specific; it is not a generic SQL security product.
 - The project does not attempt deep semantic validation of every business rule; it focuses on execution boundaries and explicit approvals.

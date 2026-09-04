@@ -438,9 +438,28 @@ Per the approved fork (explicit mock; live needs a key nobody has):
 
 ## Phase 4 — Confidence-Gated Routing (Sep 4, 2026)
 **Status:** ✅ Completed
-
 Per the approved design (clarify on garbage):
 
 1. **Structured router**: JSON `{"route", "confidence", "reasoning"}` contract with layered parse and `RouteDecision`; `ROUTER_CONFIDENCE_THRESHOLD=0.6`; low-confidence/unparseable → clarification question; every decision traced with confidence + reasoning.
 2. **Eval harness**: `scripts/router_eval.py` (40 cases, release-check exit codes) + hermetic metric tests. **Live: 97.5% (39/40), 0 deferred** — single miss analyzed ("Who lives in Chicago?" is genuinely ambiguous phrasing; kept, not tuned away).
 3. Full suite: **285 passed / 10 skipped**; ruff + pip check clean.
+
+## Phase 6 — Observability & Ops Maturity (Sep 4, 2026)
+**Status:** ✅ Completed
+
+1. **`/metrics`** (Prometheus exposition, zero new deps): DB-sourced business aggregates + in-process latency via middleware; `/metrics` login-gated.
+2. **JSON logs**: `LOG_FORMAT=json` (one object per line); text stays default.
+3. **`/health/detailed`**: always-200 readiness shape (`db`/`redis`/`llm` checks, `ok`/`degraded`); `/health` untouched for load balancers.
+4. **Secrets docs**: sensitivity table + AWS Secrets Manager/Doppler path in `DEPLOYMENT.md`.
+5. `tests/test_observability.py` (6 tests). Live scrape verified against a real boot.
+
+## Ticket 10 — Router Spike Verdict (Sep 4, 2026)
+**Status:** ✅ Closed — LLM router kept. Prefilter spiked at 36/37 decided @ $0/0ms vs LLM 39/40 live; hybrid caps ~95% on the Bitcoin collision; keyword lists rot. Rationale filed as `design.md` trade-off 10 (both ticket alternatives adjudicated).
+
+## Phase 7 — Documentation & Interview Artifact (Sep 4, 2026)
+**Status:** ✅ Completed (minus two human items)
+
+1. `STATUS.md` before/after table covering Phases 0–7 + tickets.
+2. README "Known Limitations & Roadmap" table (solid / stubbed / human-item / queued, each linked).
+3. `docs/DEMO.md`: 2–3 minute shot-by-shot demo script.
+4. Human items remaining: external adversarial-5 prompts, demo video recording, optional `LLM_API_KEY` repo secret.

@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done (Phase 4 follow-up) — spike measured, LLM router kept; rationale recorded as trade-off 10 in `docs/design.md`
 
-- [ ] Spike measures both alternatives (latency, routing accuracy on a fixed prompt set, cost per message)
-- [ ] Decision + rationale recorded in the design doc's trade-offs section
-- [ ] Chosen approach implemented with routing tests updated (fake router behavior preserved for tests)
-- [ ] Adversarial and budget suites stay green after the change
+- [x] Spike measures both alternatives (latency, routing accuracy on a fixed prompt set, cost per message)
+- [x] Decision + rationale recorded in the design doc's trade-offs section
+- [x] Chosen approach implemented with routing tests updated (fake router behavior preserved for tests)
+- [x] Adversarial and budget suites stay green after the change
