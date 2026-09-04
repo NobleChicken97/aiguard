@@ -10,6 +10,7 @@ lifespan does this). A null-handler is installed by default so library
 imports do not emit ``No handlers could be found`` warnings in tests.
 """
 
+import json
 import logging
 import os
 import sys
@@ -31,15 +32,35 @@ def _resolve_level(name):
     return _LOG_LEVELS.get(name.upper(), logging.INFO)
 
 
-def configure_logging(level=None, stream=None):
+class JsonFormatter(logging.Formatter):
+    """One JSON object per line: {"ts", "level", "logger", "msg"}.
+
+    Selected with ``LOG_FORMAT=json`` for log aggregators; the default
+    ``text`` format stays human-readable for local dev.
+    """
+
+    def format(self, record):
+        return json.dumps({
+            "ts": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+        })
+
+
+def configure_logging(level=None, stream=None, format=None):
     """Install a single stream handler on the root logger.
 
     Idempotent: if a handler we've previously installed is still attached,
     it is removed first so callers can re-configure at runtime.
     """
     level_name = level or os.getenv("LOG_LEVEL", "INFO")
+    format_name = (format or os.getenv("LOG_FORMAT", "text")).lower()
     handler = logging.StreamHandler(stream or sys.stderr)
-    handler.setFormatter(logging.Formatter(_DEFAULT_FORMAT))
+    if format_name == "json":
+        handler.setFormatter(JsonFormatter())
+    else:
+        handler.setFormatter(logging.Formatter(_DEFAULT_FORMAT))
     handler.setLevel(_resolve_level(level_name))
     handler.name = "agentic_guardrails_default"
 

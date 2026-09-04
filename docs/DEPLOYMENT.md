@@ -460,6 +460,31 @@ spec:
 
 ---
 
+## 🔐 Secrets Management
+
+`.env` is local-dev only (gitignored — never commit it). Every secret the
+app reads, grouped by blast radius:
+
+| Secret | Blast radius if leaked | Rotation |
+|---|---|---|
+| `ANTHROPIC_API_KEY` / `LLM_API_KEY` | Provider spend on your card | Regenerate in provider console, redeploy |
+| `SESSION_SECRET` | Forged login cookies for all users | Change → all sessions invalidate (stateless cookies) |
+| `DATABASE_URL` (prod) | Full read/write on all app + demo data | Rotate RDS creds + redeploy |
+
+Rules: secrets travel as environment variables in every supported target
+(compose `env_file`, App Runner / Render / Railway secret stores) — never
+baked into the image, never logged (the JSON logger redacts nothing
+automatically, so never `log.info` a config object). Generate secrets with
+`python -c "import secrets; print(secrets.token_hex(32))"`.
+
+Managed path (recommended on AWS): store the three values in AWS Secrets Manager, attach them as App Runner secrets (they land as env vars, no code
+changes — the app only ever reads `os.getenv`). Doppler / 1Password
+Connect follow the same shape: sync secrets → env → process. Wiring a
+provider SDK into the app itself is deliberately deferred (Phase 6 scope
+was the documented path, not the integration).
+
+---
+
 ## ✅ Production Checklist
 
 ### Security

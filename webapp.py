@@ -1,13 +1,14 @@
 import asyncio
 import json
 import secrets
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
@@ -42,6 +43,7 @@ from tools.query_builder import (
     run_builder_query,
 )
 from webapp_ratelimit import RL_STATE, configure as configure_ratelimit
+from webapp_metrics import record_http, render_prometheus
 from app_logging import configure_logging, get_logger
 
 logger = get_logger("webapp")
@@ -122,6 +124,20 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def _metrics_middleware(request: Request, call_next):
+    """Time watched endpoints into the in-process /metrics counters."""
+    started = time.monotonic()
+    response = await call_next(request)
+    record_http(
+        request.method,
+        request.url.path,
+        getattr(response, "status_code", 0),
+        time.monotonic() - started,
+    )
+    return response
+
+
 @app.get("/health")
 def health_check():
     """Lightweight health endpoint used by Docker and load balancers."""
@@ -140,6 +156,51 @@ def health_check():
         "db_connected": db_ok,
         "session_count": rows["cnt"] if rows else 0,
     })
+
+
+@app.get("/health/detailed")
+def health_detailed(request: Request):
+    """Readiness-style deep check for monitoring (scrape the `status` field).
+
+    Always answers 200 by design — load balancers keep using the fast
+    `/health`; humans and dashboards read per-check detail here. Redis is
+    informational (optional by design, never degrades status); the LLM
+    check reports configuration only, never burning quota on a probe call.
+    """
+    require_user(request)
+    checks: dict = {}
+    try:
+        conn = get_connection()
+        try:
+            conn.execute("SELECT 1 AS ok").fetchone()
+            checks["db"] = {"ok": True}
+        finally:
+            conn.close()
+    except Exception as e:
+        checks["db"] = {"ok": False, "error": str(e)[:120]}
+    try:
+        import redis
+
+        rc = redis.Redis.from_url(
+            config.REDIS_URL,
+            decode_responses=True,
+            socket_connect_timeout=1,
+            socket_timeout=1,
+        )
+        rc.ping()
+        checks["redis"] = {"ok": True, "mode": "optional"}
+    except Exception:
+        checks["redis"] = {"ok": False, "mode": "optional-fallback"}
+    checks["llm"] = {"configured": _llm_configured()}
+    status = "ok" if (checks["db"].get("ok") and checks["llm"].get("configured")) else "degraded"
+    return JSONResponse({"status": status, "checks": checks})
+
+
+@app.get("/metrics")
+def metrics_endpoint(request: Request):
+    """Prometheus exposition (DB aggregates + in-process latency)."""
+    require_user(request)
+    return PlainTextResponse(render_prometheus(), media_type="text/plain; version=0.0.4")
 
 
 def _compute_stats(user_id=None, is_admin=False):
