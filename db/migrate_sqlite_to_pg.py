@@ -34,11 +34,14 @@ TABLE_COPY_ORDER = [
     "orders",
     "order_items",
     "app_sessions",
+    "app_users",
     "app_messages",
     "app_tool_calls",
     "app_approval_requests",
+    "app_pending_resumes",
     "app_memory_facts",
     "app_trace_events",
+    "app_builder_runs",
 ]
 
 

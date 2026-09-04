@@ -2,7 +2,7 @@
 
 **NetSentry Capstone Project — Advanced AI Engineering**
 
-[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml) <!-- replace OWNER/REPO once the GitHub remote exists (ticket 02) -->
+[![CI](https://github.com/NobleChicken97/agentic_guardrails/actions/workflows/ci.yml/badge.svg)](https://github.com/NobleChicken97/agentic_guardrails/actions/workflows/ci.yml)
 
 A production-ready agentic orchestration system that safely executes SQL queries against a real database through a comprehensive guardrail layer, human-in-the-loop approval system, and persistent memory.
 
@@ -239,9 +239,11 @@ order_items (id INTEGER PRIMARY KEY, order_id INTEGER, product_id INTEGER, quant
 ### Associated Tables (Datamodel)
 ```sql
 app_sessions (session_id, user_id, started_at, status)
+app_users (user_id, email, pw_hash, role, created_at)
 app_messages (message_id, session_id, role, content, timestamp)
 app_tool_calls (call_id, session_id, tool_name, input, status, created_at)
 app_approval_requests (approval_id, call_id, session_id, risk_reason, decided_by, decision, decided_at)
+app_pending_resumes (call_id, approval_id, session_id, worker_name, messages, tool_name, tool_input, created_at)
 app_online_users (user_id, last_seen_at)
 app_online_metadata (user_id, metadata JSON)
 app_memory_facts (fact_id, user_id, fact_text, source_session_id, created_at)

@@ -45,8 +45,9 @@ def pg_env():
         try:
             conn.execute(
                 """TRUNCATE customers, products, orders, order_items,
-                   app_sessions, app_messages, app_tool_calls,
-                   app_approval_requests, app_memory_facts, app_trace_events
+                   app_sessions, app_users, app_messages, app_tool_calls,
+                   app_approval_requests, app_pending_resumes,
+                   app_memory_facts, app_trace_events, app_builder_runs
                    RESTART IDENTITY"""
             )
             conn.commit()

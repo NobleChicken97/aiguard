@@ -36,9 +36,11 @@ The app uses a lightweight relational model with two layers:
 
 1. Application state tables
    - app_sessions: one row per conversation
+   - app_users: accounts (email, bcrypt hash, role) for the login gate
    - app_messages: persisted user/assistant/tool messages
    - app_tool_calls: persisted tool invocations with input payloads
    - app_approval_requests: pending or resolved user approvals
+   - app_pending_resumes: paused-turn snapshots for the async approval flow
    - app_memory_facts: distilled long-term user facts
    - app_trace_events: append-only session trace log
 
