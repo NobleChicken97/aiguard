@@ -428,7 +428,7 @@ def build_select_sql(spec):
     return sql, tuple(params), selected
 
 
-def _audit_run(table_name, sql, verdict, row_count, elapsed_ms):
+def _audit_run(table_name, sql, verdict, row_count, elapsed_ms, user_id=None):
     """Persist one audit row per builder run to ``app_builder_runs``.
 
     Deliberately not ``app_tool_calls``: builder runs are human-initiated,
@@ -439,8 +439,8 @@ def _audit_run(table_name, sql, verdict, row_count, elapsed_ms):
     try:
         conn.execute(
             """INSERT INTO app_builder_runs
-               (run_id, table_name, sql_text, verdict, row_count, elapsed_ms, executed_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               (run_id, table_name, sql_text, verdict, row_count, elapsed_ms, executed_at, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 str(uuid.uuid4()),
                 table_name,
@@ -449,6 +449,7 @@ def _audit_run(table_name, sql, verdict, row_count, elapsed_ms):
                 row_count,
                 elapsed_ms,
                 datetime.now(timezone.utc).isoformat(),
+                user_id,
             ),
         )
         conn.commit()
@@ -456,14 +457,14 @@ def _audit_run(table_name, sql, verdict, row_count, elapsed_ms):
         conn.close()
 
 
-def run_builder_query(spec):
+def run_builder_query(spec, user_id=None):
     """Build, guardrail-check, execute, and PII-mask a builder SELECT."""
     started = time.perf_counter()
     sql, params, columns = build_select_sql(spec)
 
     result = SQLGuardrail().check(sql)
     if not result.allowed:
-        _audit_run(spec.table, sql, result.verdict, 0, round((time.perf_counter() - started) * 1000, 2))
+        _audit_run(spec.table, sql, result.verdict, 0, round((time.perf_counter() - started) * 1000, 2), user_id=user_id)
         return {
             "sql": sql,
             "guardrail": result.to_dict(),
@@ -486,7 +487,7 @@ def run_builder_query(spec):
         for row_cells in cells
     ]
     elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
-    _audit_run(spec.table, sql, result.verdict, len(masked_rows), elapsed_ms)
+    _audit_run(spec.table, sql, result.verdict, len(masked_rows), elapsed_ms, user_id=user_id)
     return {
         "sql": sql,
         "guardrail": result.to_dict(),

@@ -57,6 +57,14 @@ CREATE TABLE IF NOT EXISTS app_trace_events (
     timestamp    TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS app_users (
+    user_id      TEXT PRIMARY KEY,
+    email        TEXT NOT NULL UNIQUE,
+    pw_hash      TEXT NOT NULL,
+    role         TEXT NOT NULL DEFAULT 'user',
+    created_at   TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS app_builder_runs (
     run_id       TEXT PRIMARY KEY,
     table_name   TEXT NOT NULL,
@@ -64,7 +72,8 @@ CREATE TABLE IF NOT EXISTS app_builder_runs (
     verdict      TEXT NOT NULL,
     row_count    INTEGER NOT NULL DEFAULT 0,
     elapsed_ms   REAL NOT NULL DEFAULT 0,
-    executed_at  TEXT NOT NULL
+    executed_at  TEXT NOT NULL,
+    user_id      TEXT
 );
 """
 

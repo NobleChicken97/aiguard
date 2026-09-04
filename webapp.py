@@ -20,7 +20,17 @@ from approval.gate import (
     AutoApproveHandler,
     WebApprovalHandler,
     get_pending_approvals,
+    owns_approval,
     resolve_approval,
+)
+from auth import (
+    SESSION_COOKIE,
+    authenticate,
+    create_user,
+    get_optional_user,
+    owns_session,
+    require_user,
+    sign_session,
 )
 from db.database import get_connection, initialize_db
 from tools.query_builder import (
@@ -47,6 +57,9 @@ _chat_llm_client_override = None
 
 class ChatRequest(BaseModel):
     message: str
+    # Legacy client field — IGNORED. Identity always comes from the session
+    # cookie (Phase 1): trusting a client-supplied user_id would let any
+    # caller read another user's sessions.
     user_id: str = "web_user"
     session_id: str | None = None
     # When true, use AutoApproveHandler so the chat returns immediately
@@ -108,12 +121,15 @@ def health_check():
     })
 
 
-def _compute_stats():
+def _compute_stats(user_id=None, is_admin=False):
     """Aggregate live system statistics for the monitoring dashboard.
 
     All queries are dialect-safe (SQLite + PostgreSQL). Guardrail verdicts
     are counted in Python from recent trace events because verdicts live
     inside JSON payloads, and JSON extraction functions differ per dialect.
+
+    Counters are global aggregates; row-level data (recent sessions) is
+    scoped to the requesting user unless they are an admin.
     """
     try:
         conn = get_connection()
@@ -149,15 +165,20 @@ def _compute_stats():
                    LIMIT 500"""
             ).fetchall()
 
-            recent_rows = conn.execute(
-                """SELECT s.session_id, s.user_id, s.started_at, s.status,
+            recent_sql = """SELECT s.session_id, s.user_id, s.started_at, s.status,
                           COUNT(t.trace_id) AS event_count
                    FROM app_sessions s
                    LEFT JOIN app_trace_events t ON t.session_id = s.session_id
+                   {where}
                    GROUP BY s.session_id, s.user_id, s.started_at, s.status
                    ORDER BY s.started_at DESC
                    LIMIT 10"""
-            ).fetchall()
+            if is_admin or user_id is None:
+                recent_rows = conn.execute(recent_sql.format(where="")).fetchall()
+            else:
+                recent_rows = conn.execute(
+                    recent_sql.format(where="WHERE s.user_id = ?"), (user_id,)
+                ).fetchall()
         finally:
             conn.close()
 
@@ -182,7 +203,11 @@ def _compute_stats():
             "messages": messages,
             "tool_calls": tool_calls,
             "builder_runs": builder_runs,
-            "pending_approvals": len(get_pending_approvals()),
+            "pending_approvals": len(
+                get_pending_approvals()
+                if is_admin
+                else get_pending_approvals(for_user_id=user_id)
+            ),
             "guardrail": {
                 "allowed_recent": allowed,
                 "blocked_recent": blocked,
@@ -208,9 +233,10 @@ def _compute_stats():
 
 
 @app.get("/api/stats")
-def stats_api():
-    """One-shot snapshot of system statistics."""
-    return JSONResponse(_compute_stats())
+def stats_api(request: Request):
+    """One-shot snapshot of system statistics (row-level data scoped)."""
+    user = require_user(request)
+    return JSONResponse(_compute_stats(user["user_id"], user["role"] == "admin"))
 
 
 @app.get("/api/stream")
@@ -218,19 +244,22 @@ async def stats_stream(request: Request):
     """Server-Sent Events stream pushing a fresh stats snapshot every 2s.
 
     DB aggregation runs in the threadpool so the event loop is never
-    blocked while clients stay connected. The per-IP concurrent stream
+    blocked while clients stay connected. The per-user concurrent stream
     cap keeps one client from pinning a worker per request.
     """
-    client_ip = _client_ip(request)
+    user = require_user(request)
+    stream_key = f"user:{user['user_id']}"
     try:
-        slot = RL_STATE["stream_guard"].acquire(client_ip)
+        slot = RL_STATE["stream_guard"].acquire(stream_key)
     except RL_STATE["stream_guard"].StreamLimitExceeded as e:
-        logger.info("sse stream limit hit ip=%s", client_ip)
+        logger.info("sse stream limit hit user=%s", user["user_id"])
         raise HTTPException(status_code=429, detail=str(e))
     with slot:
         async def event_generator():
             while True:
-                stats = await run_in_threadpool(_compute_stats)
+                stats = await run_in_threadpool(
+                    _compute_stats, user["user_id"], user["role"] == "admin"
+                )
                 yield f"data: {json.dumps(stats)}\n\n"
                 await asyncio.sleep(2)
 
@@ -243,63 +272,77 @@ async def stats_stream(request: Request):
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard_page(request: Request):
+    user = get_optional_user(request)
+    if user is None:
+        return RedirectResponse(url="/login", status_code=303)
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
-        context={"request": request},
+        context={"request": request, "current_user": user},
     )
 
 
 @app.get("/query-builder", response_class=HTMLResponse)
 def query_builder_page(request: Request):
+    user = get_optional_user(request)
+    if user is None:
+        return RedirectResponse(url="/login", status_code=303)
     return templates.TemplateResponse(
         request=request,
         name="query_builder.html",
-        context={"request": request},
+        context={"request": request, "current_user": user},
     )
 
 
 @app.get("/api/query-builder/schema")
-def query_builder_schema():
+def query_builder_schema(request: Request):
     """Live schema metadata (allowed tables + columns) for the builder UI."""
+    require_user(request)  # metadata only, but stateful surface stays login-gated
     return JSONResponse(get_builder_schema())
 
 
 @app.post("/api/query-builder/run")
-def query_builder_run(req: QueryBuilderRequest):
+def query_builder_run(req: QueryBuilderRequest, request: Request):
     """Execute a visually-built SELECT through the guardrail layer.
 
     Read-only by construction; validation failures surface as 400s with the
-    same operator-friendly messages shown in the UI.
+    same operator-friendly messages shown in the UI. The run is attributed
+    to the logged-in user in the audit table.
     """
+    user = require_user(request)
     try:
-        result = run_builder_query(req)
+        result = run_builder_query(req, user_id=user["user_id"])
     except QueryBuilderError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return JSONResponse(result)
 
 
-def _load_sessions(limit=50):
+def _load_sessions(limit=50, user_id=None, is_admin=False):
     conn = get_connection()
     try:
-        rows = conn.execute(
-            """SELECT s.session_id, s.user_id, s.started_at, s.status,
+        base_sql = """SELECT s.session_id, s.user_id, s.started_at, s.status,
                       COUNT(t.trace_id) AS event_count
                FROM app_sessions s
                LEFT JOIN app_trace_events t ON t.session_id = s.session_id
+               {where}
                GROUP BY s.session_id, s.user_id, s.started_at, s.status
                ORDER BY s.started_at DESC
-               LIMIT ?""",
-            (limit,),
-        ).fetchall()
+               LIMIT ?"""
+        if is_admin or user_id is None:
+            rows = conn.execute(base_sql.format(where=""), (limit,)).fetchall()
+        else:
+            rows = conn.execute(
+                base_sql.format(where="WHERE s.user_id = ?"), (user_id, limit)
+            ).fetchall()
         return [dict(row) for row in rows]
     finally:
         conn.close()
 
 
-def _build_pending_rows():
+def _build_pending_rows(user=None):
+    scope = None if (user is None or user.get("role") == "admin") else user["user_id"]
     rows = []
-    for item in get_pending_approvals():
+    for item in get_pending_approvals(for_user_id=scope):
         input_value = item.get("input")
         try:
             parsed_input = json.loads(input_value) if isinstance(input_value, str) else input_value
@@ -343,6 +386,13 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
+def _rate_key(request: Request, user) -> str:
+    """Per-user rate-limit identity, IP fallback for pre-auth paths."""
+    if user is not None:
+        return f"user:{user['user_id']}"
+    return f"ip:{_client_ip(request)}"
+
+
 CSRF_COOKIE = "approval_csrf"
 
 
@@ -361,6 +411,68 @@ def _csrf_ok(request: Request, submitted_token: str) -> bool:
     return secrets.compare_digest(cookie_token, submitted_token)
 
 
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    if get_optional_user(request) is not None:
+        return RedirectResponse(url="/chat", status_code=303)
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={"request": request, "error": None},
+    )
+
+
+@app.post("/login", response_class=HTMLResponse)
+def login_submit(request: Request, email: str = Form(""), password: str = Form("")):
+    # Identical failure shape for unknown-email vs wrong-password (see
+    # auth.authenticate) so login cannot enumerate accounts.
+    user = authenticate(email, password)
+    if user is None:
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={"request": request, "error": "Invalid email or password."},
+            status_code=401,
+        )
+    response = RedirectResponse(url="/chat", status_code=303)
+    response.set_cookie(SESSION_COOKIE, sign_session(user["user_id"]), httponly=True, samesite="lax")
+    return response
+
+
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request):
+    if get_optional_user(request) is not None:
+        return RedirectResponse(url="/chat", status_code=303)
+    return templates.TemplateResponse(
+        request=request,
+        name="register.html",
+        context={"request": request, "error": None},
+    )
+
+
+@app.post("/register", response_class=HTMLResponse)
+def register_submit(request: Request, email: str = Form(""), password: str = Form("")):
+    try:
+        user_id = create_user(email, password)
+    except ValueError as e:
+        return templates.TemplateResponse(
+            request=request,
+            name="register.html",
+            context={"request": request, "error": str(e)},
+            status_code=400,
+        )
+    response = RedirectResponse(url="/chat", status_code=303)
+    response.set_cookie(SESSION_COOKIE, sign_session(user_id), httponly=True, samesite="lax")
+    return response
+
+
+@app.post("/logout")
+def logout():
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie(SESSION_COOKIE)
+    return response
+
+
 @app.get("/", response_class=HTMLResponse)
 def root():
     return RedirectResponse(url="/chat", status_code=303)
@@ -368,18 +480,22 @@ def root():
 
 @app.get("/chat", response_class=HTMLResponse)
 def chat_page(request: Request):
+    user = get_optional_user(request)
+    if user is None:
+        return RedirectResponse(url="/login", status_code=303)
     return templates.TemplateResponse(
         request=request,
         name="chat.html",
-        context={"request": request, "llm_configured": _llm_configured()},
+        context={"request": request, "llm_configured": _llm_configured(), "current_user": user},
     )
 
 
 @app.post("/api/chat")
 async def chat_api(req: ChatRequest, request: Request):
-    client_ip = _client_ip(request)
-    if not RL_STATE["chat_bucket"].allow(client_ip):
-        logger.info("chat rate-limited ip=%s", client_ip)
+    user = require_user(request)
+    rate_key = _rate_key(request, user)
+    if not RL_STATE["chat_bucket"].allow(rate_key):
+        logger.info("chat rate-limited key=%s", rate_key)
         raise HTTPException(
             status_code=429,
             detail="Too many chat requests. Slow down and retry shortly.",
@@ -404,7 +520,7 @@ async def chat_api(req: ChatRequest, request: Request):
     orchestrator = Orchestrator(
         llm_client=llm_client,
         approval_handler=approval_handler,
-        user_id=req.user_id,
+        user_id=user["user_id"],
     )
 
     if req.session_id:
@@ -423,39 +539,30 @@ async def chat_api(req: ChatRequest, request: Request):
 
 
 @app.get("/api/sessions")
-def sessions_list(limit: int = 50, user_id: str | None = None):
+def sessions_list(request: Request, limit: int = 50, user_id: str | None = None):
     """JSON list of sessions for programmatic access (dashboards, scripts).
 
-    The HTML ``/traces`` page already exposes a session list; this endpoint
-    returns the same data as JSON. Optional ``user_id`` filter scopes the
-    result to a single user. ``limit`` is clamped to 1..500.
+    Scoped to the caller: non-admins always see their own sessions (the
+    ``user_id`` filter is admin-only, for the cross-user approval demo).
+    ``limit`` is clamped to 1..500.
     """
+    user = require_user(request)
+    is_admin = user["role"] == "admin"
+    user_id = user_id if (is_admin and user_id) else user["user_id"]
     safe_limit = max(1, min(int(limit), 500))
     conn = get_connection()
     try:
-        if user_id:
-            rows = conn.execute(
-                """SELECT s.session_id, s.user_id, s.started_at, s.status,
-                          COUNT(t.trace_id) AS event_count
-                   FROM app_sessions s
-                   LEFT JOIN app_trace_events t ON t.session_id = s.session_id
-                   WHERE s.user_id = ?
-                   GROUP BY s.session_id, s.user_id, s.started_at, s.status
-                   ORDER BY s.started_at DESC
-                   LIMIT ?""",
-                (user_id, safe_limit),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """SELECT s.session_id, s.user_id, s.started_at, s.status,
-                          COUNT(t.trace_id) AS event_count
-                   FROM app_sessions s
-                   LEFT JOIN app_trace_events t ON t.session_id = s.session_id
-                   GROUP BY s.session_id, s.user_id, s.started_at, s.status
-                   ORDER BY s.started_at DESC
-                   LIMIT ?""",
-                (safe_limit,),
-            ).fetchall()
+        rows = conn.execute(
+            """SELECT s.session_id, s.user_id, s.started_at, s.status,
+                      COUNT(t.trace_id) AS event_count
+               FROM app_sessions s
+               LEFT JOIN app_trace_events t ON t.session_id = s.session_id
+               WHERE s.user_id = ?
+               GROUP BY s.session_id, s.user_id, s.started_at, s.status
+               ORDER BY s.started_at DESC
+               LIMIT ?""",
+            (user_id, safe_limit),
+        ).fetchall()
         return JSONResponse(
             {
                 "limit": safe_limit,
@@ -468,7 +575,10 @@ def sessions_list(limit: int = 50, user_id: str | None = None):
 
 
 @app.get("/api/sessions/{session_id}/messages")
-def session_messages(session_id: str):
+def session_messages(session_id: str, request: Request):
+    user = require_user(request)
+    if user["role"] != "admin" and not owns_session(user["user_id"], session_id):
+        raise HTTPException(status_code=404, detail="Session not found.")
     conn = get_connection()
     try:
         rows = conn.execute(
@@ -483,15 +593,21 @@ def session_messages(session_id: str):
 
 @app.get("/memory-inspector", response_class=HTMLResponse)
 def memory_inspector_page(request: Request):
+    user = get_optional_user(request)
+    if user is None:
+        return RedirectResponse(url="/login", status_code=303)
     return templates.TemplateResponse(
         request=request,
         name="memory_inspector.html",
-        context={"request": request},
+        context={"request": request, "current_user": user},
     )
 
 
 @app.get("/api/users/{user_id}/memory")
-def user_memory_api(user_id: str):
+def user_memory_api(user_id: str, request: Request):
+    caller = require_user(request)
+    if caller["role"] != "admin" and user_id != caller["user_id"]:
+        raise HTTPException(status_code=404, detail="User not found.")
     ltm = LongTermMemory()
     try:
         facts = ltm.get_all_facts(user_id)
@@ -501,12 +617,16 @@ def user_memory_api(user_id: str):
 
 
 @app.delete("/api/users/{user_id}/memory/{fact_id}")
-def delete_user_fact(user_id: str, fact_id: str):
+def delete_user_fact(user_id: str, fact_id: str, request: Request):
     """Delete one long-term fact so future sessions stop injecting it.
 
-    Scoped to ``user_id`` on purpose: a fact id belonging to a different
-    user resolves to 404 instead of deleting across users.
+    Scoped to the caller: only the fact owner (or an admin) may delete.
+    A fact id belonging to a different user resolves to 404 instead of
+    deleting across users (or revealing the fact exists).
     """
+    caller = require_user(request)
+    if caller["role"] != "admin" and user_id != caller["user_id"]:
+        raise HTTPException(status_code=404, detail="Fact not found for this user.")
     ltm = LongTermMemory()
     try:
         deleted = ltm.delete_fact(fact_id, user_id=user_id)
@@ -519,15 +639,20 @@ def delete_user_fact(user_id: str, fact_id: str):
 
 @app.get("/approval-queue", response_class=HTMLResponse)
 def approval_queue(request: Request):
+    user = get_optional_user(request)
+    if user is None:
+        return RedirectResponse(url="/login", status_code=303)
     csrf_token = secrets.token_urlsafe(32)
+    is_admin = user["role"] == "admin"
     response = templates.TemplateResponse(
         request=request,
         name="approval_queue.html",
         context={
             "request": request,
-            "pending_approvals": _build_pending_rows(),
-            "session_count": len(_load_sessions()),
+            "pending_approvals": _build_pending_rows(user),
+            "session_count": len(_load_sessions(user_id=user["user_id"], is_admin=is_admin)),
             "csrf_token": csrf_token,
+            "current_user": user,
         },
     )
     response.set_cookie(CSRF_COOKIE, csrf_token, httponly=True, samesite="lax")
@@ -536,8 +661,11 @@ def approval_queue(request: Request):
 
 @app.post("/approvals/{approval_id}/approve")
 def approve_action(approval_id: str, request: Request, csrf_token: str = Form("")):
+    user = require_user(request)
     if not _csrf_ok(request, csrf_token):
         raise HTTPException(status_code=403, detail="Invalid or missing CSRF token.")
+    if user["role"] != "admin" and not owns_approval(user["user_id"], approval_id):
+        raise HTTPException(status_code=404, detail="Approval request not found or already resolved.")
     if not resolve_approval(approval_id, "approved"):
         raise HTTPException(status_code=404, detail="Approval request not found or already resolved.")
     return RedirectResponse(url="/approval-queue", status_code=303)
@@ -545,8 +673,11 @@ def approve_action(approval_id: str, request: Request, csrf_token: str = Form(""
 
 @app.post("/approvals/{approval_id}/deny")
 def deny_action(approval_id: str, request: Request, csrf_token: str = Form("")):
+    user = require_user(request)
     if not _csrf_ok(request, csrf_token):
         raise HTTPException(status_code=403, detail="Invalid or missing CSRF token.")
+    if user["role"] != "admin" and not owns_approval(user["user_id"], approval_id):
+        raise HTTPException(status_code=404, detail="Approval request not found or already resolved.")
     if not resolve_approval(approval_id, "denied"):
         raise HTTPException(status_code=404, detail="Approval request not found or already resolved.")
     return RedirectResponse(url="/approval-queue", status_code=303)
@@ -554,7 +685,11 @@ def deny_action(approval_id: str, request: Request, csrf_token: str = Form("")):
 
 @app.get("/traces", response_class=HTMLResponse)
 def traces_index(request: Request):
-    sessions = _load_sessions()
+    user = get_optional_user(request)
+    if user is None:
+        return RedirectResponse(url="/login", status_code=303)
+    is_admin = user["role"] == "admin"
+    sessions = _load_sessions(user_id=user["user_id"], is_admin=is_admin)
     selected_session_id = sessions[0]["session_id"] if sessions else None
     selected_trace = get_session_trace(selected_session_id) if selected_session_id else []
     return templates.TemplateResponse(
@@ -565,13 +700,20 @@ def traces_index(request: Request):
             "sessions": sessions,
             "selected_session_id": selected_session_id,
             "selected_trace": selected_trace,
+            "current_user": user,
         },
     )
 
 
 @app.get("/traces/{session_id}", response_class=HTMLResponse)
 def trace_replay(request: Request, session_id: str):
-    sessions = _load_sessions()
+    user = get_optional_user(request)
+    if user is None:
+        return RedirectResponse(url="/login", status_code=303)
+    is_admin = user["role"] == "admin"
+    sessions = _load_sessions(user_id=user["user_id"], is_admin=is_admin)
+    if not is_admin and not owns_session(user["user_id"], session_id):
+        raise HTTPException(status_code=404, detail="Session not found.")
     selected_trace = get_session_trace(session_id)
     if not selected_trace and not any(session["session_id"] == session_id for session in sessions):
         raise HTTPException(status_code=404, detail="Session not found.")
@@ -583,10 +725,14 @@ def trace_replay(request: Request, session_id: str):
             "sessions": sessions,
             "selected_session_id": session_id,
             "selected_trace": selected_trace,
+            "current_user": user,
         },
     )
 
 
 @app.get("/api/traces/{session_id}")
-def trace_api(session_id: str):
+def trace_api(session_id: str, request: Request):
+    user = require_user(request)
+    if user["role"] != "admin" and not owns_session(user["user_id"], session_id):
+        raise HTTPException(status_code=404, detail="Session not found.")
     return JSONResponse({"session_id": session_id, "events": get_session_trace(session_id)})

@@ -30,6 +30,11 @@ SESSION_COST_BUDGET_USD = float(os.getenv("SESSION_COST_BUDGET_USD", "0.50"))
 # this many minutes; it is never marked ended just because a turn finished.
 SESSION_IDLE_MINUTES = int(os.getenv("SESSION_IDLE_MINUTES", "15"))
 
+# Signing secret for web session cookies (Phase 1 auth). Empty means an
+# ephemeral per-process secret (logins die on restart) — fine for local
+# dev, not for production; set a long random SESSION_SECRET there.
+SESSION_SECRET = os.getenv("SESSION_SECRET", "")
+
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 ALLOWED_TABLES = {"customers", "products", "orders", "order_items"}

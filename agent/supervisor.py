@@ -34,12 +34,12 @@ Task: {task}
             return "ResearchWorker"
         return "SQLWorker"
 
-    def run(self, task: str, context: str = "", session_id=None, trace=None) -> str:
+    def run(self, task: str, context: str = "", session_id=None, trace=None, system_prompt="") -> str:
         worker_name = self.route(task)
         if trace:
             trace.log("supervisor_route", {"routed_to": worker_name, "task": task})
-            
+
         if worker_name == "SQLWorker":
-            return self.sql_worker.run(task, context=context, session_id=session_id, trace=trace)
+            return self.sql_worker.run(task, context=context, session_id=session_id, trace=trace, system_prompt=system_prompt)
         else:
-            return self.research_worker.run(task, context=context, session_id=session_id, trace=trace)
+            return self.research_worker.run(task, context=context, session_id=session_id, trace=trace, system_prompt=system_prompt)

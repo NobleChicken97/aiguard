@@ -7,6 +7,7 @@ sys.path.insert(0, ".")
 
 from db.database import reset_db
 from db.seed import seed_demo_data
+from auth import SESSION_COOKIE, create_user, sign_session
 from guardrails.sql_guardrail import SQLGuardrail
 from webapp import app
 
@@ -19,7 +20,9 @@ def fresh_db():
 
 @pytest.fixture()
 def client():
+    uid = create_user("builder@test.local", "testpass123")
     with TestClient(app) as test_client:
+        test_client.cookies.set(SESSION_COOKIE, sign_session(uid))
         yield test_client
 
 
@@ -43,6 +46,7 @@ def test_query_builder_page_renders_with_nav_link(client):
     assert "/api/query-builder/schema" in page.text
     assert "Run query" in page.text
     assert "Query Builder" in client.get("/chat").text
+    assert "Logout" in client.get("/chat").text
 
 
 def test_schema_endpoint_lists_allowed_tables_and_columns(client):

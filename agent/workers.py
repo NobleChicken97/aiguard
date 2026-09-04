@@ -23,15 +23,23 @@ class WorkerBase:
         self.tools = tools
         self.llm = llm_client or ClaudeLLMClient()
 
-    def run(self, task: str, context: str = "", session_id=None, trace=None) -> str:
+    def run(self, task: str, context: str = "", session_id=None, trace=None, system_prompt="") -> str:
         messages = [
             {"role": "user", "content": f"Context:\n{context}\n\nTask:\n{task}"}
         ]
 
+        # The orchestrator's system prompt (schema + long-term memory facts)
+        # prefixes the worker's own instructions so personalization actually
+        # reaches the LLM — previously it was built but never sent (STATUS.md
+        # Finding 5).
+        worker_system = f"You are a specialized worker: {self.name}. {self.description}"
+        if system_prompt:
+            worker_system = f"{system_prompt}\n\n{worker_system}"
+
         # Limited loop for the worker (configurable; keeps runaway agents bounded)
         for _ in range(config.WORKER_MAX_ITERATIONS):
             response = self.llm.call(
-                system=f"You are a specialized worker: {self.name}. {self.description}",
+                system=worker_system,
                 messages=messages,
                 tools=self.tools.get_schemas()
             )

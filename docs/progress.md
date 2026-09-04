@@ -387,3 +387,16 @@ Findings from the Sep 1 full-project audit (whole codebase + docs + UI read; gra
 3. **Stub labeled**: `chat.html` notice now states research uses a demo search stub, not live results.
 4. **Finding 5 homed**: dead system-prompt/LTM-facts fix → Phase 1 with auth (decided, recorded in `STATUS.md`).
 5. **Worktree cleaned**: P3 `_now`/`_uuid` consolidation committed with `app_util.py`; `.commandcode/` gitignored; temp `coverage_run.txt` removed. Verified: ruff clean, 31 targeted tests green.
+6. **Post-push health (owner check)**: full suite `196 passed / 8 PG-skipped` — identical to the pre-0.5 baseline, so the `0.50` cost default and `> 0` token guard changed no tested behavior; `ruff check .` clean. Pushed `48dbff1..efd1efd`, worktree clean.
+
+## Phase 1 — Auth + Multi-Tenancy + Memory Fix (Sep 4, 2026)
+**Status:** ✅ Completed
+
+Per the approved design (HMAC cookies, login-everywhere, register-UI demos, builder migration):
+
+1. **Schema**: `app_users` (email UNIQUE, bcrypt hash, role) + nullable `app_builder_runs.user_id`, both auto-migrated for existing DBs. No hard FK on legacy free-text session owners — app-layer enforcement, documented.
+2. **`auth.py` (new)**: bcrypt-direct passwords (passlib 1.7.4 proven broken vs bcrypt>=4.1, dropped), stateless HMAC session cookies (7-day TTL), `require_user`/`get_optional_user`, `owns_session`. 404-not-403 on cross-user access.
+3. **Scoping**: all 7 tables gated; client-supplied `user_id` no longer trusted; rate limits per-user; `register`/`login`/`logout` pages + nav user chip; demo-search stub banner shipped in Phase 0.5 retained.
+4. **Finding 5 fixed**: system prompt (schema + LTM facts) now reaches both workers; `axolotls` regression test proves session-1 facts land in session-2 prompts.
+5. **Tests**: new `tests/test_authz.py` (19 tests) + 7 adjacent suites retrofitted (incl. per-IP→per-user ratelimit semantics). Full suite: **215 passed / 8 skipped**; ruff + pip check clean.
+6. **Follow-ups queued**: login/register CSRF, global-counter documentation (by design), test-DB isolation (pre-existing).

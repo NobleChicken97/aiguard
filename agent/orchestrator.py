@@ -185,7 +185,8 @@ class Orchestrator:
 
         try:
             final_text = self._supervisor.run(
-                user_message, context=context_str, session_id=self.session_id, trace=self.trace
+                user_message, context=context_str, session_id=self.session_id, trace=self.trace,
+                system_prompt=self._system_prompt or "",
             )
         except Exception as e:
             from agent.budget import BudgetExceededError

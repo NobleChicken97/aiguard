@@ -2,9 +2,10 @@
 
 Two complementary guards:
 
-* ``TokenBucket``  - a sliding-window-per-minute cap on POST ``/api/chat``
-  calls (configurable via ``CHAT_RATE_PER_MIN``). Disabled when 0.
-* ``ConcurrentStreamGuard`` - a per-IP cap on simultaneously open SSE
+* ``TokenBucket``  - a per-user sliding-window-per-minute cap on POST ``/api/chat``
+  calls (configurable via ``CHAT_RATE_PER_MIN``; IP fallback pre-auth).
+  Disabled when 0.
+* ``ConcurrentStreamGuard`` - a per-user cap on simultaneously open SSE
   streams on ``/api/stream`` so a client cannot pin a worker per request
   (configurable via ``SSE_MAX_PER_IP``). Disabled when 0.
 

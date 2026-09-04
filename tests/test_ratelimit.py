@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, ".")
 
 from agent.llm_client import FakeLLMClient
+from auth import SESSION_COOKIE, create_user, sign_session
 from db.database import reset_db
 from db.seed import seed_demo_data
 from webapp import app
@@ -110,14 +111,15 @@ class TestChatEndpointRateLimit:
     def test_429_when_chat_per_min_exceeded(self, monkeypatch):
         fake_llm = FakeLLMClient([FakeLLMClient.text_response("ok")])
         webapp_module._chat_llm_client_override = fake_llm
+        uid = create_user("rl@test.local", "testpass123")
         try:
             with TestClient(app) as client:
-                # The lifespan has already configured the limiter to the
-                # default (disabled). Reconfigure with a small cap.
+                client.cookies.set(SESSION_COOKIE, sign_session(uid))
+                # The limiter is keyed per user (Phase 1); reconfigure small.
                 configure_ratelimit(chat_per_min=2, sse_max_per_ip=0)
-                ok1 = client.post("/api/chat", json={"message": "hi", "user_id": "u1"})
-                ok2 = client.post("/api/chat", json={"message": "hi", "user_id": "u1"})
-                blocked = client.post("/api/chat", json={"message": "hi", "user_id": "u1"})
+                ok1 = client.post("/api/chat", json={"message": "hi"})
+                ok2 = client.post("/api/chat", json={"message": "hi"})
+                blocked = client.post("/api/chat", json={"message": "hi"})
 
             assert ok1.status_code == 200
             assert ok2.status_code == 200
@@ -127,7 +129,9 @@ class TestChatEndpointRateLimit:
             webapp_module._chat_llm_client_override = None
             configure_ratelimit(chat_per_min=0, sse_max_per_ip=0)
 
-    def test_rate_limit_is_per_ip(self, monkeypatch):
+    def test_rate_limit_is_per_user(self, monkeypatch):
+        """One user's throttle never affects another user (Phase 1: the
+        chat bucket is keyed by account, with IP only as a pre-auth fallback)."""
         fake_llm = FakeLLMClient(
             [
                 FakeLLMClient.text_response("a"),
@@ -135,22 +139,21 @@ class TestChatEndpointRateLimit:
             ]
         )
         webapp_module._chat_llm_client_override = fake_llm
+        uid_a = create_user("rla@test.local", "testpass123")
+        uid_b = create_user("rlb@test.local", "testpass123")
         try:
-            with TestClient(app) as client:
+            with TestClient(app) as client_a:
+                client_a.cookies.set(SESSION_COOKIE, sign_session(uid_a))
                 configure_ratelimit(chat_per_min=1, sse_max_per_ip=0)
-                ip1 = client.post(
-                    "/api/chat",
-                    json={"message": "hi"},
-                    headers={"X-Forwarded-For": "1.2.3.4"},
-                )
-                ip2 = client.post(
-                    "/api/chat",
-                    json={"message": "hi"},
-                    headers={"X-Forwarded-For": "5.6.7.8"},
-                )
+                first_a = client_a.post("/api/chat", json={"message": "hi"})
+                throttled_a = client_a.post("/api/chat", json={"message": "hi"})
+            with TestClient(app) as client_b:
+                client_b.cookies.set(SESSION_COOKIE, sign_session(uid_b))
+                first_b = client_b.post("/api/chat", json={"message": "hi"})
 
-            assert ip1.status_code == 200
-            assert ip2.status_code == 200
+            assert first_a.status_code == 200
+            assert throttled_a.status_code == 429
+            assert first_b.status_code == 200
         finally:
             webapp_module._chat_llm_client_override = None
             configure_ratelimit(chat_per_min=0, sse_max_per_ip=0)
@@ -187,20 +190,20 @@ class TestSSEStreamLimit:
 
     def test_sse_endpoint_rejects_over_cap(self):
         """End-to-end at the endpoint: hold the only stream slot via the
-        guard, then a second request from the same client gets 429.
+        guard, then a second request from the same user gets 429.
         """
+        uid = create_user("sse@test.local", "testpass123")
         with TestClient(app) as client:
+            client.cookies.set(SESSION_COOKIE, sign_session(uid))
             configure_ratelimit(chat_per_min=0, sse_max_per_ip=1)
             try:
                 # Hold the slot in-process before the request so the
                 # endpoint sees the cap is already full.
                 from webapp_ratelimit import RL_STATE
 
-                held = RL_STATE["stream_guard"].acquire("7.7.7.7")
+                held = RL_STATE["stream_guard"].acquire(f"user:{uid}")
                 try:
-                    resp = client.get(
-                        "/api/stream", headers={"X-Forwarded-For": "7.7.7.7"}
-                    )
+                    resp = client.get("/api/stream")
                     assert resp.status_code == 429
                 finally:
                     held.__exit__(None, None, None)

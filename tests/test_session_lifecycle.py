@@ -19,6 +19,7 @@ import config
 from agent.llm_client import FakeLLMClient
 from agent.orchestrator import Orchestrator
 from approval.gate import AutoApproveHandler
+from auth import SESSION_COOKIE, create_user, sign_session
 from db.database import get_connection, initialize_db, reset_db
 from db.seed import seed_demo_data
 from webapp import app
@@ -87,15 +88,18 @@ def test_active_sessions_counts_only_activity_within_idle_window():
     orchestrator = Orchestrator(
         llm_client=FakeLLMClient([FakeLLMClient.text_response("done.")]),
         approval_handler=AutoApproveHandler(),
-        user_id="fresh_user",
+        user_id=create_user("fresh@test.local", "testpass123"),
     )
     orchestrator.run("Hello")
 
     with TestClient(app) as client:
+        client.cookies.set(SESSION_COOKIE, sign_session(orchestrator.user_id))
         stats = client.get("/api/stats").json()
     assert stats["active_sessions"] == 1  # only the just-touched session
     session_ids = {s["session_id"] for s in stats["recent_sessions"]}
-    assert {orchestrator.session_id, stale_session} <= session_ids
+    assert orchestrator.session_id in session_ids
+    # Row-level isolation: another user's stale session is not listed.
+    assert stale_session not in session_ids
 
 
 def test_initialize_db_migrates_legacy_sessions_table(tmp_path, monkeypatch):

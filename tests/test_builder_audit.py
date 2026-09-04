@@ -11,6 +11,7 @@ sys.path.insert(0, ".")
 
 from db.database import get_connection, reset_db
 from db.seed import seed_demo_data
+from auth import SESSION_COOKIE, create_user, sign_session
 from tools.query_builder import QueryBuilderRequest, run_builder_query
 from webapp import app
 
@@ -48,7 +49,9 @@ def test_builder_runs_counted_in_stats_without_touching_agent_metrics():
     run_builder_query(QueryBuilderRequest(table="products", filters=[]))
     run_builder_query(QueryBuilderRequest(table="orders", filters=[]))
 
+    uid = create_user("audit@test.local", "testpass123")
     with TestClient(app) as client:
+        client.cookies.set(SESSION_COOKIE, sign_session(uid))
         stats = client.get("/api/stats").json()
     assert stats["builder_runs"] == 2
     assert stats["tool_calls"] == 0

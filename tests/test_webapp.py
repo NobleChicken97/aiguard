@@ -1,5 +1,3 @@
-from uuid import uuid4
-
 import re
 import sys
 import threading
@@ -15,6 +13,7 @@ from agent.llm_client import FakeLLMClient
 from agent.memory import LongTermMemory
 from agent.orchestrator import Orchestrator
 from approval.gate import AutoApproveHandler
+from auth import SESSION_COOKIE, create_user, sign_session
 from db.database import get_connection, reset_db
 from db.seed import seed_demo_data
 from webapp import app
@@ -25,6 +24,19 @@ import webapp as webapp_module
 def fresh_db():
     reset_db()
     seed_demo_data()
+
+
+def _make_user(email=None, password="testpass123", role="user"):
+    """Create an account; returns its user_id (fresh DB per test)."""
+    email = email or f"{uuid4().hex[:8]}@test.local"
+    return create_user(email, password, role=role)
+
+
+def _authed_client(user_id):
+    """TestClient carrying a valid session cookie for user_id."""
+    client = TestClient(app)
+    client.cookies.set(SESSION_COOKIE, sign_session(user_id))
+    return client
 
 
 _CSRF_INPUT_RE = re.compile(r'name="csrf_token" value="([^"]+)"')
@@ -39,7 +51,7 @@ def _page_csrf_token(client):
     return match.group(1)
 
 
-def _seed_pending_action(sql):
+def _seed_pending_action(sql, user_id):
     session_id = str(uuid4())
     call_id = str(uuid4())
     approval_id = str(uuid4())
@@ -48,7 +60,7 @@ def _seed_pending_action(sql):
     try:
         conn.execute(
             "INSERT INTO app_sessions (session_id, user_id, started_at, status) VALUES (?, ?, ?, ?)",
-            (session_id, "web_user", "2026-07-10T00:00:00+00:00", "active"),
+            (session_id, user_id, "2026-07-10T00:00:00+00:00", "active"),
         )
         conn.execute(
             "INSERT INTO app_tool_calls (call_id, session_id, tool_name, input, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -68,9 +80,10 @@ def _seed_pending_action(sql):
 
 
 def test_approval_queue_renders_and_resolves_actions():
+    uid = _make_user()
     sql = "UPDATE customers SET city = 'Approved City' WHERE id <= 6;"
-    approval_id, _session_id = _seed_pending_action(sql)
-    with TestClient(app) as client:
+    approval_id, _session_id = _seed_pending_action(sql, uid)
+    with _authed_client(uid) as client:
         page = client.get("/approval-queue")
         assert page.status_code == 200
         assert approval_id in page.text
@@ -85,10 +98,11 @@ def test_approval_queue_renders_and_resolves_actions():
 
 
 def test_approval_actions_reject_missing_or_wrong_csrf_token():
+    uid = _make_user()
     approval_id, _session_id = _seed_pending_action(
-        "UPDATE customers SET city = 'CSRF City' WHERE id = 1;"
+        "UPDATE customers SET city = 'CSRF City' WHERE id = 1;", uid
     )
-    with TestClient(app) as client:
+    with _authed_client(uid) as client:
         client.get("/approval-queue")  # sets the CSRF cookie
 
         no_token = client.post(f"/approvals/{approval_id}/approve")
@@ -105,6 +119,7 @@ def test_approval_actions_reject_missing_or_wrong_csrf_token():
 
 
 def test_trace_replay_page_and_api_show_session_events():
+    uid = _make_user()
     fake_llm = FakeLLMClient([
         FakeLLMClient.tool_use_response("calculator", {"expression": "15 * 37"}, "toolu_trace_1"),
         FakeLLMClient.text_response("15 * 37 = 555."),
@@ -112,10 +127,10 @@ def test_trace_replay_page_and_api_show_session_events():
     orchestrator = Orchestrator(
         llm_client=fake_llm,
         approval_handler=AutoApproveHandler(),
-        user_id="trace_user",
+        user_id=uid,
     )
     result = orchestrator.run("What is 15 times 37?")
-    with TestClient(app) as client:
+    with _authed_client(uid) as client:
         page = client.get(f"/traces/{orchestrator.session_id}")
         assert page.status_code == 200
         assert "final_answer" in page.text
@@ -139,7 +154,8 @@ def test_health_endpoint_reports_database_status():
 
 
 def test_chat_page_and_memory_inspector_pages_render():
-    with TestClient(app) as client:
+    uid = _make_user()
+    with _authed_client(uid) as client:
         chat_page = client.get("/chat")
         assert chat_page.status_code == 200
         assert "Agent Chat" in chat_page.text
@@ -159,13 +175,15 @@ def test_chat_api_fails_gracefully_without_api_key(monkeypatch):
     monkeypatch.setattr(webapp_module.config, "LLM_PROVIDER", "anthropic")
     monkeypatch.setattr(webapp_module.config, "LLM_API_KEY", "")
     webapp_module._chat_llm_client_override = None
-    with TestClient(app) as client:
-        response = client.post("/api/chat", json={"message": "hello", "user_id": "web_user"})
+    uid = _make_user()
+    with _authed_client(uid) as client:
+        response = client.post("/api/chat", json={"message": "hello"})
         assert response.status_code == 400
         assert "ANTHROPIC_API_KEY" in response.text
 
 
 def test_chat_api_resumes_existing_session():
+    uid = _make_user()
     fake_llm = FakeLLMClient([
         FakeLLMClient.text_response("First web response."),
         FakeLLMClient.text_response("Resumed web response."),
@@ -173,8 +191,8 @@ def test_chat_api_resumes_existing_session():
     webapp_module._chat_llm_client_override = fake_llm
 
     try:
-        with TestClient(app) as client:
-            first = client.post("/api/chat", json={"message": "hello", "user_id": "web_user"})
+        with _authed_client(uid) as client:
+            first = client.post("/api/chat", json={"message": "hello"})
             assert first.status_code == 200
             payload = first.json()
             session_id = payload["session_id"]
@@ -183,7 +201,7 @@ def test_chat_api_resumes_existing_session():
 
             second = client.post(
                 "/api/chat",
-                json={"message": "follow up", "user_id": "web_user", "session_id": session_id},
+                json={"message": "follow up", "session_id": session_id},
             )
             assert second.status_code == 200
             resumed_payload = second.json()
@@ -201,18 +219,20 @@ def test_chat_api_resumes_existing_session():
 
 
 def test_user_memory_api_returns_persisted_facts():
-    LongTermMemory().save_facts("memory_user", ["Likes pineapple on pizza."], source_session_id="s1")
-    with TestClient(app) as client:
-        response = client.get("/api/users/memory_user/memory")
+    uid = _make_user()
+    LongTermMemory().save_facts(uid, ["Likes pineapple on pizza."], source_session_id="s1")
+    with _authed_client(uid) as client:
+        response = client.get(f"/api/users/{uid}/memory")
         assert response.status_code == 200
         data = response.json()
-        assert data["user_id"] == "memory_user"
+        assert data["user_id"] == uid
         assert len(data["facts"]) == 1
         assert data["facts"][0]["fact_text"] == "Likes pineapple on pizza."
 
 
 def test_dashboard_page_renders_with_nav_link():
-    with TestClient(app) as client:
+    uid = _make_user()
+    with _authed_client(uid) as client:
         page = client.get("/dashboard")
         assert page.status_code == 200
         assert "System Dashboard" in page.text
@@ -222,6 +242,7 @@ def test_dashboard_page_renders_with_nav_link():
 
 
 def test_api_stats_returns_live_counts():
+    uid = _make_user()
     fake_llm = FakeLLMClient([
         FakeLLMClient.tool_use_response(
             "sql_tool",
@@ -233,15 +254,15 @@ def test_api_stats_returns_live_counts():
     orchestrator = Orchestrator(
         llm_client=fake_llm,
         approval_handler=AutoApproveHandler(),
-        user_id="stats_user",
+        user_id=uid,
     )
     orchestrator.run("Who lives in Chicago?")
 
     _approval_id, active_session = _seed_pending_action(
-        "UPDATE products SET stock = 0 WHERE id <= 6;"
+        "UPDATE products SET stock = 0 WHERE id <= 6;", uid
     )
 
-    with TestClient(app) as client:
+    with _authed_client(uid) as client:
         response = client.get("/api/stats")
         assert response.status_code == 200
         stats = response.json()
@@ -285,15 +306,15 @@ def test_web_approval_flow_end_to_end():
     )
     webapp_module._chat_llm_client_override = fake_llm
 
+    uid = _make_user()
     response_holder = {}
 
     def chat_call():
-        with TestClient(app) as client:
+        with _authed_client(uid) as client:
             response_holder["resp"] = client.post(
                 "/api/chat",
                 json={
                     "message": "do the bulk change",
-                    "user_id": "e2e_user",
                     "auto_approve": False,
                     "approval_timeout": 10,
                 },
@@ -302,29 +323,31 @@ def test_web_approval_flow_end_to_end():
     chat_thread = threading.Thread(target=chat_call)
     chat_thread.start()
 
-    # Wait for the pending approval to land in the queue.
-    from approval.gate import get_pending_approvals, resolve_approval
+    try:
+        # Wait for the pending approval to land in the queue.
+        from approval.gate import get_pending_approvals, resolve_approval
 
-    pending = []
-    deadline = time.time() + 5
-    while time.time() < deadline and not pending:
-        pending = get_pending_approvals()
-        if not pending:
-            time.sleep(0.1)
+        pending = []
+        deadline = time.time() + 5
+        while time.time() < deadline and not pending:
+            pending = get_pending_approvals()
+            if not pending:
+                time.sleep(0.1)
 
-    assert pending, "Expected at least one pending approval in the queue"
-    approval_id = pending[0]["approval_id"]
+        assert pending, "Expected at least one pending approval in the queue"
+        approval_id = pending[0]["approval_id"]
 
-    # Approve it via the database (the web UI does the same through
-    # ``/approvals/{id}/approve`` which calls resolve_approval).
-    assert resolve_approval(approval_id, "approved", decided_by="e2e_user")
+        # Approve it via the database (the web UI does the same through
+        # ``/approvals/{id}/approve`` which calls resolve_approval).
+        assert resolve_approval(approval_id, "approved", decided_by="e2e_user")
 
-    chat_thread.join(timeout=15)
-    assert not chat_thread.is_alive(), "Chat request did not unblock in time"
-    assert response_holder["resp"].status_code == 200
-    body = response_holder["resp"].json()
-    assert body["response"] == "Approval flow completed."
-    webapp_module._chat_llm_client_override = None
+        chat_thread.join(timeout=15)
+        assert not chat_thread.is_alive(), "Chat request did not unblock in time"
+        assert response_holder["resp"].status_code == 200
+        body = response_holder["resp"].json()
+        assert body["response"] == "Approval flow completed."
+    finally:
+        webapp_module._chat_llm_client_override = None
 
 
 def test_web_approval_queue_endpoint_resolves_pending():
@@ -332,10 +355,11 @@ def test_web_approval_queue_endpoint_resolves_pending():
     and removes it from the queue, matching what the WebApprovalHandler
     polling loop is waiting for.
     """
+    uid = _make_user()
     approval_id, _ = _seed_pending_action(
-        "UPDATE customers SET city = 'Berlin' WHERE id <= 6;"
+        "UPDATE customers SET city = 'Berlin' WHERE id <= 6;", uid
     )
-    with TestClient(app) as client:
+    with _authed_client(uid) as client:
         before = client.get("/approval-queue")
         assert before.status_code == 200
         assert approval_id in before.text
@@ -365,23 +389,25 @@ def test_web_approval_timeout_returns_denial():
         route_decision="SQL",
     )
     webapp_module._chat_llm_client_override = fake_llm
+    uid = _make_user()
 
-    with TestClient(app) as client:
-        resp = client.post(
-            "/api/chat",
-            json={
-                "message": "do the bulk change",
-                "user_id": "e2e_timeout_user",
-                "auto_approve": False,
-                "approval_timeout": 1,
-            },
-        )
-    assert resp.status_code == 200
-    # The final text is the agent's "Done after denial." because the
-    # SQL tool was denied after the timeout, then the LLM was re-asked
-    # and produced a final answer.
-    assert resp.json()["response"] == "Done after denial."
-    webapp_module._chat_llm_client_override = None
+    try:
+        with _authed_client(uid) as client:
+            resp = client.post(
+                "/api/chat",
+                json={
+                    "message": "do the bulk change",
+                    "auto_approve": False,
+                    "approval_timeout": 1,
+                },
+            )
+        assert resp.status_code == 200
+        # The final text is the agent's "Done after denial." because the
+        # SQL tool was denied after the timeout, then the LLM was re-asked
+        # and produced a final answer.
+        assert resp.json()["response"] == "Done after denial."
+    finally:
+        webapp_module._chat_llm_client_override = None
 
 
 def test_sessions_list_endpoint_returns_json():
@@ -390,9 +416,10 @@ def test_sessions_list_endpoint_returns_json():
     """
     fake_llm = FakeLLMClient([FakeLLMClient.text_response("ok")])
     webapp_module._chat_llm_client_override = fake_llm
+    uid = _make_user()
     try:
-        with TestClient(app) as client:
-            client.post("/api/chat", json={"message": "hi", "user_id": "session_user"})
+        with _authed_client(uid) as client:
+            client.post("/api/chat", json={"message": "hi"})
 
             resp = client.get("/api/sessions")
             assert resp.status_code == 200
@@ -400,34 +427,46 @@ def test_sessions_list_endpoint_returns_json():
             assert "limit" in payload
             assert "sessions" in payload
             assert any(
-                s["user_id"] == "session_user" for s in payload["sessions"]
+                s["user_id"] == uid for s in payload["sessions"]
             )
     finally:
         webapp_module._chat_llm_client_override = None
 
 
 def test_sessions_list_endpoint_filters_by_user_id():
+    """Non-admins always see their own sessions (the user_id filter is
+    ignored for them); admins may filter by user (cross-user demo)."""
     fake_llm = FakeLLMClient(
         [FakeLLMClient.text_response("a"), FakeLLMClient.text_response("b")]
     )
     webapp_module._chat_llm_client_override = fake_llm
     try:
-        with TestClient(app) as client:
-            client.post("/api/chat", json={"message": "hi", "user_id": "alice"})
-            client.post("/api/chat", json={"message": "hi", "user_id": "bob"})
+        uid_a = _make_user()
+        uid_b = _make_user()
+        admin_id = _make_user(password="adminpass123", role="admin")
+        _authed_client(uid_a).post("/api/chat", json={"message": "hi"})
+        _authed_client(uid_b).post("/api/chat", json={"message": "hi"})
 
-            only_alice = client.get("/api/sessions?user_id=alice")
-            assert only_alice.status_code == 200
-            payload = only_alice.json()
-            assert payload["user_id"] == "alice"
-            assert all(s["user_id"] == "alice" for s in payload["sessions"])
-            assert len(payload["sessions"]) >= 1
+        # A asks for B's sessions: still sees only A's (filter ignored).
+        only_a = _authed_client(uid_a).get(f"/api/sessions?user_id={uid_b}")
+        assert only_a.status_code == 200
+        payload = only_a.json()
+        assert payload["user_id"] == uid_a
+        assert all(s["user_id"] == uid_a for s in payload["sessions"])
+        assert len(payload["sessions"]) >= 1
+
+        # Admin filter works.
+        only_b = _authed_client(admin_id).get(f"/api/sessions?user_id={uid_b}")
+        assert only_b.status_code == 200
+        assert all(s["user_id"] == uid_b for s in only_b.json()["sessions"])
+        assert len(only_b.json()["sessions"]) >= 1
     finally:
         webapp_module._chat_llm_client_override = None
 
 
 def test_sessions_list_endpoint_clamps_limit():
-    with TestClient(app) as client:
+    uid = _make_user()
+    with _authed_client(uid) as client:
         resp = client.get("/api/sessions?limit=99999")
         assert resp.status_code == 200
         assert resp.json()["limit"] == 500

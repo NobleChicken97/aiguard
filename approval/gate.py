@@ -124,18 +124,51 @@ class WebApprovalHandler(ApprovalHandler):
             conn.close()
 
 
-def get_pending_approvals():
+def get_pending_approvals(for_user_id=None):
+    """Pending approvals, optionally scoped to one user's sessions.
+
+    ``for_user_id=None`` returns everything (dashboard aggregate counter,
+    admin queue view). Otherwise only approvals whose session row belongs
+    to that user — the per-user isolation rule for the approval queue.
+    """
     conn = get_connection()
     try:
-        rows = conn.execute(
-            """SELECT ar.approval_id, ar.call_id, ar.session_id, ar.risk_reason,
-                      ar.created_at, tc.tool_name, tc.input
-               FROM app_approval_requests ar
-               JOIN app_tool_calls tc ON ar.call_id = tc.call_id
-               WHERE ar.decision IS NULL
-               ORDER BY ar.created_at ASC""",
-        ).fetchall()
+        if for_user_id is None:
+            rows = conn.execute(
+                """SELECT ar.approval_id, ar.call_id, ar.session_id, ar.risk_reason,
+                          ar.created_at, tc.tool_name, tc.input
+                   FROM app_approval_requests ar
+                   JOIN app_tool_calls tc ON ar.call_id = tc.call_id
+                   WHERE ar.decision IS NULL
+                   ORDER BY ar.created_at ASC""",
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT ar.approval_id, ar.call_id, ar.session_id, ar.risk_reason,
+                          ar.created_at, tc.tool_name, tc.input
+                   FROM app_approval_requests ar
+                   JOIN app_tool_calls tc ON ar.call_id = tc.call_id
+                   JOIN app_sessions s ON ar.session_id = s.session_id
+                   WHERE ar.decision IS NULL AND s.user_id = ?
+                   ORDER BY ar.created_at ASC""",
+                (for_user_id,),
+            ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def owns_approval(user_id, approval_id):
+    """True when the approval's session belongs to the user."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            """SELECT 1 AS ok FROM app_approval_requests ar
+               JOIN app_sessions s ON ar.session_id = s.session_id
+               WHERE ar.approval_id = ? AND s.user_id = ?""",
+            (approval_id, user_id),
+        ).fetchone()
+        return row is not None
     finally:
         conn.close()
 

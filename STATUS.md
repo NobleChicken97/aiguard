@@ -99,3 +99,15 @@ Decisions from review — all implemented except where noted:
 3. Mock web-search banner added to the `chat.html` notice line ("Research answers currently use a built-in demo search stub, not live web results"). UI no longer presents stub research silently.
 4. Finding 5 (dead system prompt / LTM facts never reach the LLM) → **Phase 1 with auth**. Decided, not yet fixed.
 5. Worktree: P3 `_now`/`_uuid` consolidation committed (`app_util.py` added + 4 files); `.commandcode/` gitignored (harness config, not project source); `coverage_run.txt` (measurement temp file) deleted.
+
+## Phase 1 — Auth + multi-tenancy + memory fix (2026-09-04)
+
+Shipped, full suite green: **215 passed (196 + 19 new), 8 PG-skipped**; ruff + pip check clean.
+
+1. `app_users` table (email UNIQUE, bcrypt hash, `user`/`admin` role) + `app_builder_runs.user_id` (nullable, auto-migrated like `last_active_at`; old rows stay NULL).
+2. `auth.py`: stateless HMAC cookies (`user_id:expiry:sig`, 7-day TTL), `require_user` (401) / `get_optional_user` (pages → `/login`), `owns_session`, 404-not-403 cross-user convention.
+3. Every stateful endpoint login-gated; `ChatRequest.user_id` now ignored (was client-trusted — the core hole); sessions/messages/traces/approvals scoped via session-JOIN ownership; rate limits keyed per-user (IP fallback pre-auth); `/health` stays open.
+4. Finding 5 fixed: orchestrator `_system_prompt` threads through supervisor into both workers; regression test proves an LTM fact from session 1 reaches session 2's prompt.
+5. `tests/test_authz.py`: 19 tests (register×4, login/logout, anon redirects, tamper/expiry 401s, 7-table isolation incl. builder attribution + admin cross-user demo, per-user throttle, fact persistence).
+6. Deviation from plan, with reason: **bcrypt used directly, passlib dropped** — passlib 1.7.4's handler raises against bcrypt>=4.1 (verified live); same primitive, one less trap dependency.
+7. Known follow-ups (not fixed): login/register POSTs have no CSRF (login-CSRF is marginal, queued); `/api/stats` counters stay global aggregates by design (row data scoped); test suite still resets the real dev DB (pre-existing pattern).

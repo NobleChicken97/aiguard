@@ -14,6 +14,7 @@ sys.path.insert(0, ".")
 
 from db.database import reset_db
 from db.seed import seed_demo_data
+from auth import SESSION_COOKIE, create_user, sign_session
 from tools.query_builder import QueryBuilderError, QueryBuilderRequest, run_builder_query
 from webapp import app
 
@@ -25,7 +26,9 @@ def fresh_db():
 
 
 def test_schema_endpoint_exposes_declared_foreign_keys():
+    uid = create_user("joins@test.local", "testpass123")
     with TestClient(app) as client:
+        client.cookies.set(SESSION_COOKIE, sign_session(uid))
         data = client.get("/api/query-builder/schema").json()
     fks_by_table = {t["name"]: t.get("fks", []) for t in data["tables"]}
     assert {"column": "customer_id", "target_table": "customers", "target_column": "id"} in fks_by_table["orders"]
@@ -123,7 +126,9 @@ def test_join_order_by_must_be_output_alias():
 
 
 def test_join_endpoint_run_passes_guardrail_invariant():
+    uid = create_user("joins2@test.local", "testpass123")
     with TestClient(app) as client:
+        client.cookies.set(SESSION_COOKIE, sign_session(uid))
         resp = client.post(
             "/api/query-builder/run",
             json={

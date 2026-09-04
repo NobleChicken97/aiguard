@@ -230,6 +230,12 @@
       <a href="/approval-queue">Approval Queue</a>
       <a href="/traces">Trace Replay</a>
       <a href="/memory-inspector">Memory Inspector</a>
+      {% if current_user %}
+      <span class="muted" style="align-self: center; font-size: 0.9rem;">{{ current_user.email }} ({{ current_user.role }})</span>
+      <form method="post" action="/logout" style="display: inline; margin: 0;">
+        <button class="button secondary" type="submit" style="padding: 0.55rem 0.9rem;">Logout</button>
+      </form>
+      {% endif %}
     </nav>
     {% block content %}{% endblock %}
   </main>

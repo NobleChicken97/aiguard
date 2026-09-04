@@ -14,6 +14,7 @@ sys.path.insert(0, ".")
 
 from db.database import reset_db
 from db.seed import seed_demo_data
+from auth import SESSION_COOKIE, create_user, sign_session
 from tools.query_builder import (
     AggregateSpec,
     FilterCondition,
@@ -123,7 +124,9 @@ def test_order_by_must_be_group_or_alias_in_aggregate_mode():
 
 
 def test_aggregate_endpoint_run_and_invariant():
+    uid = create_user("agg@test.local", "testpass123")
     with TestClient(app) as client:
+        client.cookies.set(SESSION_COOKIE, sign_session(uid))
         resp = client.post(
             "/api/query-builder/run",
             json={

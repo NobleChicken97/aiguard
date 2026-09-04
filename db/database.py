@@ -30,6 +30,26 @@ def _ensure_session_activity_column(conn):
         "UPDATE app_sessions SET last_active_at = started_at WHERE last_active_at IS NULL"
     )
 
+def _ensure_builder_user_column(conn):
+    """Migrate pre-Phase-1 databases: add app_builder_runs.user_id.
+
+    Same pattern as the session-activity migration above: CREATE TABLE IF
+    NOT EXISTS cannot add a column to an existing table, so the column is
+    checked and ALTERed in when missing. Old rows keep user_id NULL
+    (anonymous builder runs from before auth existed); new runs attribute.
+    """
+    if _is_postgres():
+        row = conn.execute(
+            """SELECT 1 AS ok FROM information_schema.columns
+               WHERE table_name = 'app_builder_runs' AND column_name = 'user_id'"""
+        ).fetchone()
+        if row is None:
+            conn.execute("ALTER TABLE app_builder_runs ADD COLUMN user_id TEXT")
+    else:
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(app_builder_runs)").fetchall()}
+        if "user_id" not in cols:
+            conn.execute("ALTER TABLE app_builder_runs ADD COLUMN user_id TEXT")
+
 def _init_pg_pool():
     global _pg_pool
     if _pg_pool is None and _is_postgres():
@@ -120,6 +140,7 @@ def initialize_db():
             conn.executescript(app_schema_pg)
             conn.executescript(demo_schema_pg)
             _ensure_session_activity_column(conn)
+            _ensure_builder_user_column(conn)
             conn.commit()
         finally:
             conn.close()
@@ -129,6 +150,7 @@ def initialize_db():
             conn.executescript(APP_SCHEMA)
             conn.executescript(DEMO_SCHEMA)
             _ensure_session_activity_column(conn)
+            _ensure_builder_user_column(conn)
             conn.commit()
         finally:
             conn.close()
