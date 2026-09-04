@@ -424,3 +424,12 @@ Per the approved design (short-poll, DB-backed, Redis optional):
 5. **CI**: redis:7 service + `TEST_REDIS_URL`; `test_redis_memory.py` gated suite — **ticket 03 closed**.
 6. **Tests**: 8 new pause/resume tests; e2e/timeout suites rewritten off threads. Full suite: **275 passed / 10 skipped**; ruff + pip check clean.
 7. Follow-ups: resume-row janitor, resume token-accounting restart, login CSRF.
+
+## Phase 4 — Confidence-Gated Routing (Sep 4, 2026)
+**Status:** ✅ Completed
+
+Per the approved design (clarify on garbage):
+
+1. **Structured router**: JSON `{"route", "confidence", "reasoning"}` contract with layered parse and `RouteDecision`; `ROUTER_CONFIDENCE_THRESHOLD=0.6`; low-confidence/unparseable → clarification question; every decision traced with confidence + reasoning.
+2. **Eval harness**: `scripts/router_eval.py` (40 cases, release-check exit codes) + hermetic metric tests. **Live: 97.5% (39/40), 0 deferred** — single miss analyzed ("Who lives in Chicago?" is genuinely ambiguous phrasing; kept, not tuned away).
+3. Full suite: **285 passed / 10 skipped**; ruff + pip check clean.

@@ -17,7 +17,7 @@ from agent.memory import (
     distill_facts_from_session,
 )
 from agent.orchestrator import Orchestrator
-from agent.supervisor import SupervisorAgent
+from agent.supervisor import CLARIFY_TEXT, RouteDecision, SupervisorAgent
 from agent.workers import (
     WorkerBase,
     create_research_worker,
@@ -27,6 +27,8 @@ from agent.workers import (
 __all__ = [
     "Orchestrator",
     "SupervisorAgent",
+    "RouteDecision",
+    "CLARIFY_TEXT",
     "WorkerBase",
     "create_sql_worker",
     "create_research_worker",

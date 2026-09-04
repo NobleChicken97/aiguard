@@ -30,6 +30,11 @@ SESSION_COST_BUDGET_USD = float(os.getenv("SESSION_COST_BUDGET_USD", "0.50"))
 # this many minutes; it is never marked ended just because a turn finished.
 SESSION_IDLE_MINUTES = int(os.getenv("SESSION_IDLE_MINUTES", "15"))
 
+# Router confidence gate (Phase 4): structured route replies below this
+# confidence ask the user to clarify instead of guessing a worker.
+# Range 0.0-1.0; start at 0.6 and tune from router_eval.py numbers.
+ROUTER_CONFIDENCE_THRESHOLD = float(os.getenv("ROUTER_CONFIDENCE_THRESHOLD", "0.6"))
+
 # Signing secret for web session cookies (Phase 1 auth). Empty means an
 # ephemeral per-process secret (logins die on restart) — fine for local
 # dev, not for production; set a long random SESSION_SECRET there.

@@ -136,3 +136,12 @@ Shipped, full suite green: **275 passed (266 + 8 pause/resume + 1 redis-fallback
 5. **CI + ticket 03**: `test-sqlite` job gained a `redis:7` service + `TEST_REDIS_URL`; `tests/test_redis_memory.py` (sync/restore/fallback, skips cleanly without Redis). Ticket 03 CLOSED.
 6. **Tests**: `test_pause_resume.py` (8: no-retry propagation, 202-fast, status lifecycle, 404s, double-pause with row replacement); e2e/timeout webapp tests rewritten to pause/resume (threads deleted); `approval_timeout` request field removed.
 7. Follow-ups: orphaned resume rows have no janitor (user never resumes — queued); resume restarts token accounting (noted); login/register CSRF still open.
+
+## Phase 4 — Confidence-gated routing (2026-09-04)
+
+Shipped, full suite green: **285 passed (275 + 10 new), 10 skipped**; ruff + pip check clean.
+
+1. **Contract**: router must reply JSON `{"route", "confidence", "reasoning"}`; layered parse (strict → embedded → clean legacy token at confidence 1.0); anything else → clarification question, never a guess. `route()` now returns `RouteDecision(worker, confidence, reasoning, tier)`; `ROUTER_CONFIDENCE_THRESHOLD=0.6` gates dispatch. Every decision trace-logs worker/confidence/reasoning/tier.
+2. **Contract change recorded**: 2 v1.6.1 tests updated with comments (empty + "RESEARCH (not SQL)" now clarify instead of default-SQL/first-token). FakeLLM clean-token defaults unaffected.
+3. **Eval**: `scripts/router_eval.py`, 40 hand-written cases (20/20), exit-code release semantics (bar 0.80), skips cleanly without a key; metric math pinned hermetically in `tests/test_router_eval.py`.
+4. **Live number (groq/openai/gpt-oss-120b)**: **97.5% (39/40), 0 deferred, all structured tier**. The one miss is instructive, not noise: "Who lives in Chicago?" → ResearchWorker at high confidence — the prompt reads as general knowledge without DB cue words, i.e. MY eval case wasn't crisp, the router was decisively wrong on an ambiguous phrasing. Kept as-is deliberately (tuning the set to 100% would game the metric); lowering the bar cases' ambiguity is future work, tracked by the number itself.
