@@ -130,6 +130,7 @@ Full report: [`docs/audit-2026-09-03.md`](audit-2026-09-03.md). Highlights:
   `db/__init__` export trim.
 
 ## Next Up (recommended order)
+Ground truth for ordering: [`STATUS.md`](../STATUS.md) (Phase 0, 2026-09-04 — real 90% coverage, open tickets 02/03/10, one fail-open default).
 Tracked as tracer-bullet tickets in `.scratch/netsentry-vnext/issues/` (dependency-ordered; see ticket files for acceptance criteria). **Done:** 04–09, **11** (v1.6.2–v1.6.4), **01 — live-API smoke harness** (v1.6.5, live-verified 4/4 in v1.6.6). Remaining frontier:
 1. **02** Publish repo to GitHub + activate CI — **needs the owner to create the repo/remote** → gates **03** Redis-in-CI
 2. **10** Supervisor routing spike — **now unblocked**: a free key is configured (`groq` / gpt-oss-120b), so latency/accuracy/cost of LLM routing vs a deterministic prefilter can be measured for real

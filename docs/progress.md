@@ -369,3 +369,21 @@ Findings from the Sep 1 full-project audit (whole codebase + docs + UI read; gra
    - `PGConnectionWrapper.executemany` missing → `seed_demo_data()` crashed on PostgreSQL; added to `db/database.py`.
    - Two tests in `test_postgres_integration.py` referenced bare `initialize_db()` without importing it (NameError); imports added.
    - Reused disposable instances kept SERIAL sequences advanced after prior runs → both `pg_env` fixtures now reset state with `TRUNCATE ... RESTART IDENTITY`, making tests deterministic everywhere.
+
+## Phase 0 — Ground Truth (Sep 4, 2026)
+**Status:** ✅ Completed (no code changed — measurement only)
+
+1. **Real coverage**: `BACKOFF_BASE_SECONDS=0.01 pytest --cov=agent --cov=guardrails --cov=tools` → 196 passed / 8 PG-skipped, **TOTAL 90%**. Weak spots: `web_search 40%`, `calculator 72%`, `base 75%`; Redis lines in `memory.py` and PG introspection in `query_builder.py` uncovered.
+2. **Config audit**: one fail-open default — `SESSION_COST_BUDGET_USD=0` disables the cost guard; plus a doc/code mismatch (`SESSION_MAX_TOKENS=0` documented as "unlimited", code would halt every call).
+3. **Stub inventory**: one prod stub (`WebSearchTool._MOCK_RESULTS`); zero TODO/FIXME in prod code; no mock banners in UI.
+4. **Backlog verified**: open = 02 (3 commits unpushed, badge placeholder), 03 (corroborated by uncovered Redis lines), 10. Closed = 01, 04–09, 11.
+5. **Artifact**: [`STATUS.md`](../STATUS.md) — per-module coverage, disabled-by-default guardrails, stubs, open backlog, plus 4 fresh findings (audit-P1 dead system prompt confirmed live; dirty worktree incl. untracked `app_util.py`; approval/db/webapp outside `--cov` scope; cheapest high-value tests listed).
+
+## Phase 0.5 — Stop the Bleeding (Sep 4, 2026)
+**Status:** ✅ Completed
+
+1. **Fail-open default closed**: `SESSION_COST_BUDGET_USD` `0` → `0.50` (`config.py`, `.env.example`); README already documented `0.50`.
+2. **Zero-semantics fixed in code**: `SESSION_MAX_TOKENS=0` now means unlimited (`agent/budget.py` `> 0` guard), matching docs and the repo's `0`-means-off convention.
+3. **Stub labeled**: `chat.html` notice now states research uses a demo search stub, not live results.
+4. **Finding 5 homed**: dead system-prompt/LTM-facts fix → Phase 1 with auth (decided, recorded in `STATUS.md`).
+5. **Worktree cleaned**: P3 `_now`/`_uuid` consolidation committed with `app_util.py`; `.commandcode/` gitignored; temp `coverage_run.txt` removed. Verified: ruff clean, 31 targeted tests green.
