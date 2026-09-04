@@ -38,8 +38,15 @@ Task: {task}
         worker_name = self.route(task)
         if trace:
             trace.log("supervisor_route", {"routed_to": worker_name, "task": task})
-
+            
         if worker_name == "SQLWorker":
             return self.sql_worker.run(task, context=context, session_id=session_id, trace=trace, system_prompt=system_prompt)
         else:
             return self.research_worker.run(task, context=context, session_id=session_id, trace=trace, system_prompt=system_prompt)
+
+    def resume(self, worker_name, messages, tool_use_id, output, is_error, session_id=None, trace=None, system_prompt="") -> str:
+        """Re-enter the paused worker's loop after its tool resolved."""
+        worker = self.sql_worker if worker_name == "SQLWorker" else self.research_worker
+        if trace:
+            trace.log("supervisor_resume", {"resumed_worker": worker.name})
+        return worker.resume(messages, tool_use_id, output, is_error, session_id=session_id, trace=trace, system_prompt=system_prompt)

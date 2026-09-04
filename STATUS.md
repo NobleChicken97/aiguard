@@ -124,3 +124,15 @@ Shipped, full suite green: **266 passed (215 + 51 new), 8 PG-skipped**; ruff + p
    Default OFF (`PII_NER_ENABLED=0`) with measured reason: on this schema PERSON+GPE would mask legitimate answers; wired into sql_tool/builder/memory-facts behind the flag.
 5. **Tests**: `test_column_policy.py` + `test_pii_ner.py` + `test_redteam_phase2.py` (20 self-written bypass shapes, all blocked; benign neighbors allowed). Red-team caught a real gap pre-merge: explicit INSERT column lists (Schema identifiers, not Column nodes) bypassed the check — fixed.
 6. **OPEN, needs a human**: 5 externally-written adversarial prompts (prove independence). Hand the repo to someone who has not read `sql_guardrail.py`; record their prompts + who/when here.
+
+## Phase 3 — Kill the approval poll (2026-09-04)
+
+Shipped, full suite green: **275 passed (266 + 8 pause/resume + 1 redis-fallback), 10 skipped (8 PG + 2 Redis)**; ruff + pip check clean. Suite wall time 6.5min → **77s** as a side effect below.
+
+1. **Mechanism**: `ApprovalPending` unwind exception → worker attaches loop snapshot → orchestrator persists `app_pending_resumes` row → returns `PendingApproval` → `/api/chat` answers **202**. Resume re-checks the guardrail (fail-closed), executes-or-refuses per the approval row, and re-drives the worker from the snapshot. Retired the blocking `WebApprovalHandler` (300s poll).
+2. **Headline numbers** (`scripts/load_approvals.py --n 30`, in-process): gate hold **~80ms direct-measured** (was: up to 120s per chat turn held); 30/30 concurrent gated turns 202, wall **1.9s**, max hold 1.9s (residual = 30-way SQLite write serialization, not gate-waiting — wall ≈ single-turn cost proves zero thread-holding).
+3. **Frontend**: 202 → status short-poll (1.5s) → `/api/chat/resume` auto-continues; new `GET /api/approval/{id}/status` (indexed PK read). Decisions: short-poll over SSE-push; DB-backed pending state with Redis optional (no local Redis/Docker on this box — Redis-required was unverifiable here).
+4. **Bonus find (profiling the load number)**: dead-Redis ping stalled EVERY chat 2–4s — `ShortTermMemory` pinged with no timeout on each construction. Fixed with 1s bounded timeouts + 60s process-wide down-verdict cache. This also explains historical suite slowness.
+5. **CI + ticket 03**: `test-sqlite` job gained a `redis:7` service + `TEST_REDIS_URL`; `tests/test_redis_memory.py` (sync/restore/fallback, skips cleanly without Redis). Ticket 03 CLOSED.
+6. **Tests**: `test_pause_resume.py` (8: no-retry propagation, 202-fast, status lifecycle, 404s, double-pause with row replacement); e2e/timeout webapp tests rewritten to pause/resume (threads deleted); `approval_timeout` request field removed.
+7. Follow-ups: orphaned resume rows have no janitor (user never resumes — queued); resume restarts token accounting (noted); login/register CSRF still open.

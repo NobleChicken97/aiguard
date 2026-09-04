@@ -3,7 +3,9 @@ name: CI
 # Project-specific quality gates for NetSentry (FastAPI agent + SQL guardrails):
 #   static-checks  — dependency consistency, bug-class lint (ruff E9/F), module importability
 #   test-sqlite    — adversarial guardrail suite + full 200+ test suite on the SQLite
-#                    default path, then a real uvicorn boot + /health probe
+#                    default path (plus a redis service so the Redis-gated STM
+#                    tests execute instead of skipping), then a real uvicorn
+#                    boot + /health probe
 #   test-postgres  — same suite against postgres:16 so the 8 PG-gated integration
 #                    and migration tests actually execute
 #   docker-build   — the shipped Dockerfile builds and the compose file parses
@@ -49,6 +51,18 @@ jobs:
 
   test-sqlite:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_REDIS_URL: redis://localhost:6379/0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

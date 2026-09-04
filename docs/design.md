@@ -74,7 +74,9 @@ A static SQL analyzer built with sqlglot. It parses SQL into an AST and blocks o
 - CLIApprovalHandler: interactive terminal approval
 - AutoApproveHandler: testing convenience
 - AutoDenyHandler: strict safety mode
-- WebApprovalHandler: web UI pending approval flow
+- AsyncApprovalHandler: creates the pending approval row and unwinds the
+  worker (Phase 3 pause/resume — no thread is ever held waiting); the
+  approval row is the gate decision at resume time
 
 ### Memory and trace layers
 - Short-term memory keeps the active session context

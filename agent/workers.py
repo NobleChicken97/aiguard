@@ -1,4 +1,5 @@
 import config
+from approval.gate import ApprovalPending
 from tools.base import ToolRegistry, execute_with_retry
 from tools.calculator import CalculatorTool
 from tools.web_search import WebSearchTool
@@ -27,7 +28,22 @@ class WorkerBase:
         messages = [
             {"role": "user", "content": f"Context:\n{context}\n\nTask:\n{task}"}
         ]
+        return self._drive(messages, session_id=session_id, trace=trace, system_prompt=system_prompt)
 
+    def resume(self, messages, tool_use_id, output, is_error, session_id=None, trace=None, system_prompt="") -> str:
+        """Continue a paused loop after its pending tool resolved (Phase 3).
+
+        ``messages`` is the snapshot taken at pause time (it already ends
+        with the assistant tool_use block); the resolved output is appended
+        as the tool_result the loop was waiting for, then driving resumes.
+        """
+        continued = list(messages) + [{
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": tool_use_id, "content": output, "is_error": is_error}],
+        }]
+        return self._drive(continued, session_id=session_id, trace=trace, system_prompt=system_prompt)
+
+    def _drive(self, messages, session_id=None, trace=None, system_prompt="") -> str:
         # The orchestrator's system prompt (schema + long-term memory facts)
         # prefixes the worker's own instructions so personalization actually
         # reaches the LLM — previously it was built but never sent (STATUS.md
@@ -72,7 +88,14 @@ class WorkerBase:
                 from db.database import record_tool_call
                 record_tool_call(session_id, tool_call.tool_use_id, tool_call.tool_name, tool_call.tool_input)
 
-                result = execute_with_retry(tool, kwargs, tool_call.tool_use_id, trace=trace)
+                try:
+                    result = execute_with_retry(tool, kwargs, tool_call.tool_use_id, trace=trace)
+                except ApprovalPending as pending:
+                    # Pause, don't fail: attach the loop state so resume can
+                    # continue exactly here, then unwind to release the thread.
+                    pending.worker_name = self.name
+                    pending.messages = list(messages)
+                    raise
 
                 if trace:
                     trace.log_tool_result(tool_call.tool_use_id, tool_call.tool_name, result.status, result.output)

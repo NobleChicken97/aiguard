@@ -28,9 +28,10 @@ optional and only needed for multi-instance memory sync.
 **Why not Vercel (or other serverless):** the architecture assumes a
 long-lived process, which is the point of several of its safety features —
 
-1. `WebApprovalHandler` polls the approvals table in a threadpool for up to
-   300s waiting on a human decision — serverless function timeouts kill
-   that mid-wait.
+1. Paused approval turns persist in the DB (`app_pending_resumes`) with no
+   thread held — but a resume must land back on the same logical session
+   flow, and serverless cold starts + function timeouts still fight the
+   multi-minute agent turns around it.
 2. Rate limiters (`webapp_ratelimit.py`) are in-process; serverless fans
    out to ephemeral instances, so per-IP caps silently stop working.
 3. `/api/stream` is a long-lived SSE connection; agent turns run many

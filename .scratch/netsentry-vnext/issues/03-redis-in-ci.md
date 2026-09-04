@@ -4,8 +4,8 @@
 
 **Blocked by:** 02 (publish repo to GitHub and activate CI) — CI must exist before a service can be added to it.
 
-**Status:** ready-for-agent
+**Status:** done (Phase 3) — `test-sqlite` job gained a `redis:7` service with `TEST_REDIS_URL`; `tests/test_redis_memory.py` covers sync/restore/fallback and skips cleanly without Redis (like the PG pattern)
 
-- [ ] CI includes a Redis service and a gated test suite that runs against it
-- [ ] Gated tests cover: messages sync to Redis when reachable, state restores on resume, and the graceful fallback when Redis disappears mid-session
-- [ ] The suite skips cleanly (like the PG tests) when Redis is unavailable
+- [x] CI includes a Redis service and a gated test suite that runs against it
+- [x] Gated tests cover: messages sync to Redis when reachable, state restores on resume, and the graceful fallback when Redis disappears mid-session
+- [x] The suite skips cleanly (like the PG tests) when Redis is unavailable

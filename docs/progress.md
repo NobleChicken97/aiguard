@@ -411,3 +411,16 @@ Per the approved design (BLOCK, framework with empty default):
 3. **NER**: spaCy `en_core_web_sm` second pass behind `PII_NER_ENABLED` (default off with measured reason); per-type precision/recall measured on seed and locked by tests; missing model fails safe.
 4. **Tests**: 51 new across `test_column_policy.py`, `test_pii_ner.py`, `test_redteam_phase2.py` (self-written battery; external-5 item stays OPEN for a human). Red-team caught + fixed a real INSERT-list bypass pre-merge.
 5. Full suite: **266 passed / 8 skipped**; ruff + pip check clean.
+
+## Phase 3 — Kill the Approval Poll (Sep 4, 2026)
+**Status:** ✅ Completed
+
+Per the approved design (short-poll, DB-backed, Redis optional):
+
+1. **Pause/resume core**: `ApprovalPending` unwind + `app_pending_resumes` rows; `/api/chat` returns 202 in ~80ms; resume re-checks the guardrail and re-drives the exact worker loop. Blocking `WebApprovalHandler` deleted.
+2. **Endpoints + UI**: `GET /api/approval/{id}/status`, `POST /api/chat/resume`; chat page polls (1.5s) and auto-continues on decision.
+3. **Numbers**: 30/30 concurrent gated turns 202, wall 1.9s (`scripts/load_approvals.py --n 30`).
+4. **Bonus hardening**: dead-Redis ping stalled every chat 2–4s → bounded timeouts + 60s down-verdict cache. Suite wall time dropped 6.5min → 77s.
+5. **CI**: redis:7 service + `TEST_REDIS_URL`; `test_redis_memory.py` gated suite — **ticket 03 closed**.
+6. **Tests**: 8 new pause/resume tests; e2e/timeout suites rewritten off threads. Full suite: **275 passed / 10 skipped**; ruff + pip check clean.
+7. Follow-ups: resume-row janitor, resume token-accounting restart, login CSRF.

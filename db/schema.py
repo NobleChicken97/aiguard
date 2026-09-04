@@ -75,6 +75,18 @@ CREATE TABLE IF NOT EXISTS app_builder_runs (
     executed_at  TEXT NOT NULL,
     user_id      TEXT
 );
+
+CREATE TABLE IF NOT EXISTS app_pending_resumes (
+    call_id      TEXT PRIMARY KEY,
+    approval_id  TEXT NOT NULL,
+    session_id   TEXT NOT NULL,
+    worker_name  TEXT NOT NULL,
+    messages     TEXT NOT NULL,
+    tool_name    TEXT NOT NULL,
+    tool_input   TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    FOREIGN KEY (session_id) REFERENCES app_sessions(session_id)
+);
 """
 
 DEMO_SCHEMA = """

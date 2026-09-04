@@ -17,8 +17,10 @@ from agent.memory import LongTermMemory
 from agent.orchestrator import Orchestrator
 from agent.trace import get_session_trace
 from approval.gate import (
+    AsyncApprovalHandler,
     AutoApproveHandler,
-    WebApprovalHandler,
+    PendingApproval,
+    get_approval_status,
     get_pending_approvals,
     owns_approval,
     resolve_approval,
@@ -63,12 +65,31 @@ class ChatRequest(BaseModel):
     user_id: str = "web_user"
     session_id: str | None = None
     # When true, use AutoApproveHandler so the chat returns immediately
-    # (useful for scripted demos and tests). Default false: gate risky
-    # actions through /approval-queue so the human-in-the-loop flow is
-    # actually reachable from the web UI.
+    # (useful for scripted demos and tests). Default false: risky actions
+    # pause with a 202 + approval id (Phase 3 — no thread is ever held
+    # waiting); the frontend polls and resumes via /api/chat/resume.
     auto_approve: bool = False
-    # Web approval poll timeout in seconds (ignored when auto_approve=true).
-    approval_timeout: int = 120
+
+
+class ResumeRequest(BaseModel):
+    session_id: str
+
+
+def _pending_response(pending: PendingApproval):
+    """202 payload for a paused turn (shared by chat and resume)."""
+    return JSONResponse(
+        {
+            "status": "pending_approval",
+            "approval_id": pending.approval_id,
+            "session_id": pending.session_id,
+            "detail": (
+                "Approval needed before continuing: "
+                f"{pending.risk_reason} Approve in the Approval Queue — "
+                "this chat resumes automatically once decided."
+            ),
+        },
+        status_code=202,
+    )
 
 
 @asynccontextmanager
@@ -515,7 +536,7 @@ async def chat_api(req: ChatRequest, request: Request):
     approval_handler = (
         AutoApproveHandler()
         if req.auto_approve
-        else WebApprovalHandler(timeout=req.approval_timeout)
+        else AsyncApprovalHandler()
     )
     orchestrator = Orchestrator(
         llm_client=llm_client,
@@ -531,10 +552,68 @@ async def chat_api(req: ChatRequest, request: Request):
     else:
         orchestrator.start_session()
 
-    response_text = await run_in_threadpool(orchestrator.run, req.message)
+    result = await run_in_threadpool(orchestrator.run, req.message)
+    if isinstance(result, PendingApproval):
+        # Phase 3: the worker thread is already released; the frontend
+        # polls the approval status and resumes when decided.
+        return _pending_response(result)
     return JSONResponse({
         "session_id": orchestrator.session_id,
-        "response": response_text,
+        "response": result,
+    })
+
+
+@app.get("/api/approval/{approval_id}/status")
+def approval_status(approval_id: str, request: Request):
+    """Instant pending/approved/denied lookup for frontend short-polling.
+
+    An indexed PK read — no worker thread is ever held waiting for this.
+    """
+    user = require_user(request)
+    decision, session_id, _ = get_approval_status(approval_id)
+    if session_id is None:
+        raise HTTPException(status_code=404, detail="Approval request not found.")
+    if user["role"] != "admin" and not owns_session(user["user_id"], session_id):
+        raise HTTPException(status_code=404, detail="Approval request not found.")
+    return JSONResponse({
+        "approval_id": approval_id,
+        "status": decision or "pending",
+        "session_id": session_id,
+    })
+
+
+@app.post("/api/chat/resume")
+async def chat_resume(req: ResumeRequest, request: Request):
+    """Continue a paused turn after its approval was decided."""
+    user = require_user(request)
+    if user["role"] != "admin" and not owns_session(user["user_id"], req.session_id):
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    llm_client = _get_chat_llm_client()
+    if llm_client is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No LLM API key configured. Set LLM_PROVIDER (gemini, groq,"
+                " nvidia, openai or openai-compat) with LLM_API_KEY — or"
+                " ANTHROPIC_API_KEY for the Claude path."
+            ),
+        )
+
+    orchestrator = Orchestrator(
+        llm_client=llm_client,
+        approval_handler=AsyncApprovalHandler(),
+        user_id=user["user_id"],
+    )
+    try:
+        result = await run_in_threadpool(orchestrator.resume, req.session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    if isinstance(result, PendingApproval):
+        return _pending_response(result)
+    return JSONResponse({
+        "session_id": orchestrator.session_id,
+        "response": result,
     })
 
 

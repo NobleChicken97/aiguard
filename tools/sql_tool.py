@@ -3,6 +3,7 @@ from collections import OrderedDict
 import threading
 
 from tools.base import Tool, ToolResult
+from approval.gate import ApprovalPending
 from guardrails.sql_guardrail import (
     SHAPE_COLUMN_LIMIT,
     SHAPE_TABLE_LIMIT,
@@ -147,7 +148,18 @@ class SQLTool(Tool):
 
         Returns a ToolResult when the action must not proceed (no handler
         configured, or denied by the human) and ``None`` when approved.
+        Non-blocking handlers (Phase 3) raise ApprovalPending instead of
+        waiting: the worker unwinds and the thread is released.
         """
+        if getattr(self.approval_handler, "non_blocking", False):
+            approval_id = self.approval_handler.create_pending(
+                call_id, session_id, reason, "sql_tool", {"sql": sql}
+            )
+            if _trace:
+                _trace.log_approval_request(call_id, reason)
+            raise ApprovalPending(
+                approval_id, call_id, session_id, reason, "sql_tool", {"sql": sql}
+            )
         if self.approval_handler is None:
             return ToolResult(
                 status="blocked",

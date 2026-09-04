@@ -5,6 +5,14 @@ from agent.memory import ShortTermMemory, LongTermMemory, distill_facts_from_ses
 from agent.trace import TraceLogger
 from agent.llm_client import ClaudeLLMClient
 from app_util import new_uuid as _uuid, now_utc as _now
+from approval.gate import (
+    ApprovalPending,
+    PendingApproval,
+    delete_pending_resume,
+    get_approval_status,
+    load_pending_resume,
+    save_pending_resume,
+)
 from guardrails.pii_guardrail import PIIGuardrail
 
 
@@ -140,6 +148,20 @@ class Orchestrator:
         self.trace.log("session_resume", {"user_id": self.user_id, "messages_loaded": len(rows)})
         return self.session_id
 
+    def _ensure_supervisor(self):
+        # Lazily build (and reuse) the supervisor with a budget-guarded LLM
+        # client so cost/token limits hold on every call path, not just the
+        # orchestrator's own loop.
+        if self._supervisor is None:
+            from agent.supervisor import SupervisorAgent
+            from agent.budget import BudgetGuardedLLMClient
+
+            self._budget_client = BudgetGuardedLLMClient(self.llm)
+            self._supervisor = SupervisorAgent(
+                approval_handler=self.approval_handler,
+                llm_client=self._budget_client,
+            )
+
     def run(self, user_message):
         if self.session_id is None:
             self.start_session()
@@ -167,15 +189,7 @@ class Orchestrator:
         # Lazily build (and reuse) the supervisor with a budget-guarded LLM
         # client so cost/token limits hold on every call path, not just the
         # orchestrator's own loop.
-        if self._supervisor is None:
-            from agent.supervisor import SupervisorAgent
-            from agent.budget import BudgetGuardedLLMClient
-
-            self._budget_client = BudgetGuardedLLMClient(self.llm)
-            self._supervisor = SupervisorAgent(
-                approval_handler=self.approval_handler,
-                llm_client=self._budget_client,
-            )
+        self._ensure_supervisor()
 
         # Build context from previous messages
         messages = self.memory.get_messages()
@@ -188,6 +202,10 @@ class Orchestrator:
                 user_message, context=context_str, session_id=self.session_id, trace=self.trace,
                 system_prompt=self._system_prompt or "",
             )
+        except ApprovalPending as pending:
+            # Pause, don't fail: persist resume state and release the thread.
+            # The finally below still syncs token accounting on the way out.
+            return self._pause(pending)
         except Exception as e:
             from agent.budget import BudgetExceededError
 
@@ -205,12 +223,121 @@ class Orchestrator:
                 self.total_input_tokens = self._budget_client.total_input_tokens
                 self.total_output_tokens = self._budget_client.total_output_tokens
 
+        return self._complete(final_text)
+
+    def _complete(self, final_text):
         self.memory.add_assistant_message([{"type": "text", "text": final_text}])
         self._persist_message("assistant", final_text)
 
         self.trace.log_final_answer(final_text)
         self._end_session()
         return final_text
+
+    def _pause(self, pending):
+        """Persist resume state and release the worker thread (Phase 3).
+
+        The session deliberately stays open (no _end_session, no final
+        message, no fact distillation): resume() finishes the turn.
+        """
+        save_pending_resume(
+            pending.call_id,
+            pending.approval_id,
+            self.session_id,
+            pending.worker_name,
+            pending.messages,
+            pending.tool_name,
+            pending.tool_input,
+        )
+        self.trace.log("approval_paused", {
+            "approval_id": pending.approval_id,
+            "call_id": pending.call_id,
+            "reason": pending.risk_reason,
+        })
+        return PendingApproval(
+            approval_id=pending.approval_id,
+            call_id=pending.call_id,
+            session_id=self.session_id,
+            risk_reason=pending.risk_reason,
+        )
+
+    def resume(self, session_id):
+        """Continue a paused turn after the human decided.
+
+        Returns the final answer (str), or PendingApproval again when the
+        approval is still undecided. The approval row is the gate decision:
+        approved executes now, denied feeds back as a refusal. The guardrail
+        is re-checked first — policy may have changed while paused.
+        """
+        self.load_session(session_id)
+        self._ensure_supervisor()
+
+        saved = load_pending_resume(session_id)
+        if saved is None:
+            raise ValueError(f"No paused turn found for session {session_id}")
+
+        decision, _, risk_reason = get_approval_status(saved["approval_id"])
+        if decision is None:
+            self.trace.log("approval_still_pending", {"approval_id": saved["approval_id"]})
+            return PendingApproval(
+                approval_id=saved["approval_id"],
+                call_id=saved["call_id"],
+                session_id=session_id,
+                risk_reason="still awaiting a decision",
+            )
+
+        # Consume the row before re-driving: a second pause saves fresh state.
+        delete_pending_resume(saved["call_id"])
+
+        output, is_error, status = self._resolve_pending_tool(saved, decision, risk_reason)
+
+        self.trace.log_approval_decision(saved["call_id"], decision)
+        self.trace.log_tool_result(saved["call_id"], saved["tool_name"], status, output)
+
+        from agent.budget import BudgetExceededError
+
+        try:
+            final_text = self._supervisor.resume(
+                saved["worker_name"],
+                saved["messages"],
+                saved["call_id"],
+                output,
+                is_error,
+                session_id=self.session_id,
+                trace=self.trace,
+                system_prompt=self._system_prompt or "",
+            )
+        except ApprovalPending as pending:
+            return self._pause(pending)
+        except Exception as e:
+            if isinstance(e, BudgetExceededError):
+                self.trace.log_error(str(e))
+                final_text = f"I had to stop early: {e}"
+            else:
+                self.trace.log_error(f"Supervisor failed: {e}")
+                final_text = f"I encountered an error while processing your request: {e}"
+        finally:
+            if self._budget_client is not None:
+                self.total_input_tokens = self._budget_client.total_input_tokens
+                self.total_output_tokens = self._budget_client.total_output_tokens
+
+        return self._complete(final_text)
+
+    def _resolve_pending_tool(self, saved, decision, risk_reason):
+        """Execute-or-refuse the paused tool call. Returns (output, is_error, status)."""
+        if decision != "approved":
+            return f"Action denied by human: {risk_reason}", True, "denied"
+        if saved["tool_name"] != "sql_tool":
+            return f"Cannot resume unknown tool '{saved['tool_name']}'.", True, "failed"
+        from guardrails.sql_guardrail import SQLGuardrail
+        from tools.sql_tool import SQLTool
+
+        sql = (saved["tool_input"] or {}).get("sql", "")
+        verdict = SQLGuardrail().check(sql)
+        if verdict.blocked:
+            return f"BLOCKED by guardrail on resume: {verdict.reason}", True, "blocked"
+        tool = SQLTool(approval_handler=self.approval_handler)
+        result = tool._execute_sql(sql, saved["call_id"], verdict)
+        return result.output, result.status == "failed", result.status
 
     def _estimate_cost(self):
         from agent.budget import estimate_cost_usd

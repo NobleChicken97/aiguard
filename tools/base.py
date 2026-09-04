@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from approval.gate import ApprovalPending
+
 
 class ToolResult:
     def __init__(self, status, output, guardrail_verdict=None, approval_reason=None):
@@ -92,6 +94,9 @@ def execute_with_retry(tool, kwargs, call_id, trace=None):
                 last_result = result
                 continue
             return result
+        except ApprovalPending:
+            # Pause/resume signal, not a failure: never retry, never wrap.
+            raise
         except Exception as e:
             if attempt < config.MAX_RETRIES:
                 if trace:

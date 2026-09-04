@@ -4,6 +4,13 @@ from typing import List, Dict, Any
 from app_util import new_uuid as _uuid, now_utc as _now
 from db.database import get_connection
 
+# Process-wide Redis reachability verdict (Phase 3 hardening). A dead Redis
+# must degrade to None fast on EVERY construction, not re-pay a connect
+# timeout per chat turn (measured 2s stalls against dead localhost).
+# On failure we skip re-pinging for a minute; a success always re-verifies
+# (cheap when Redis is actually up). GIL-atomic float ops: no lock needed.
+_REDIS_DOWN_UNTIL = 0.0
+_REDIS_DOWN_TTL_SECONDS = 60.0
 
 
 class ShortTermMemory:
@@ -17,12 +24,27 @@ class ShortTermMemory:
 
     def _try_init_redis(self):
         import config
+        import time as _time
+
+        global _REDIS_DOWN_UNTIL
         try:
             import redis
-            client = redis.Redis.from_url(config.REDIS_URL, decode_responses=True)
+            if _time.monotonic() < _REDIS_DOWN_UNTIL:
+                self.redis_client = None
+                return
+            # Bounded timeouts: an unreachable Redis must degrade to None
+            # quickly, never stall a request path for seconds (measured 2-4s
+            # bare-ping hangs against a dead localhost on some stacks).
+            client = redis.Redis.from_url(
+                config.REDIS_URL,
+                decode_responses=True,
+                socket_connect_timeout=1,
+                socket_timeout=1,
+            )
             client.ping()
             self.redis_client = client
         except Exception:
+            _REDIS_DOWN_UNTIL = _time.monotonic() + _REDIS_DOWN_TTL_SECONDS
             self.redis_client = None
 
     def set_session_id(self, session_id):

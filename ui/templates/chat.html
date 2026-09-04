@@ -36,7 +36,7 @@
       <p class="muted" style="margin-top: 0.75rem; font-size: 0.85rem;">
         Risk-gated actions (for example, bulk updates) pause in the
         <a href="/approval-queue">Approval Queue</a> until a human decides.
-        The chat waits up to two minutes for that decision before giving up.
+        The chat returns immediately and resumes automatically once decided.
         Research answers currently use a built-in demo search stub, not live web results.
       </p>
     </div>
@@ -81,6 +81,46 @@
     btn.textContent = loading ? 'Thinking...' : 'Send';
   }
 
+  async function pollApproval(approvalId, resumeSessionId) {
+    const timer = setInterval(async () => {
+      try {
+        const st = await fetch('/api/approval/' + approvalId + '/status');
+        if (!st.ok) {
+          clearInterval(timer);
+          appendBubble('assistant', 'Approval lookup failed; decide in the Approval Queue, then send any message.');
+          return;
+        }
+        const info = await st.json();
+        if (info.status === 'pending') return;
+        clearInterval(timer);
+        setLoading(true);
+        try {
+          const re = await fetch('/api/chat/resume', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: resumeSessionId }),
+          });
+          const rdata = await re.json();
+          if (re.status === 202) {
+            appendBubble('assistant', rdata.detail || 'Still waiting on approval.');
+            pollApproval(rdata.approval_id, rdata.session_id);
+            return;
+          }
+          if (!re.ok) {
+            appendBubble('assistant', 'Error: ' + (rdata.detail || 'Unknown error'));
+            return;
+          }
+          appendBubble('assistant', rdata.response);
+        } finally {
+          setLoading(false);
+        }
+      } catch (err) {
+        clearInterval(timer);
+        appendBubble('assistant', 'Network error while waiting: ' + err.message);
+      }
+    }, 1500);
+  }
+
   document.getElementById('chat-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const input = document.getElementById('message-input');
@@ -95,9 +135,17 @@
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, user_id: 'web_user', session_id: sessionId }),
+        body: JSON.stringify({ message, session_id: sessionId }),
       });
       const data = await response.json();
+      if (response.status === 202 && data.status === 'pending_approval') {
+        sessionId = data.session_id;
+        localStorage.setItem(storageKey, sessionId);
+        setSessionDisplay(sessionId);
+        appendBubble('assistant', data.detail);
+        pollApproval(data.approval_id, data.session_id);
+        return;
+      }
       if (!response.ok) {
         appendBubble('assistant', 'Error: ' + (data.detail || data.error || 'Unknown error'));
         return;

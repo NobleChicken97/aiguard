@@ -1,7 +1,5 @@
 import re
 import sys
-import threading
-import time
 from uuid import uuid4
 
 import pytest
@@ -283,11 +281,9 @@ def test_api_stats_returns_live_counts():
 
 
 def test_web_approval_flow_end_to_end():
-    """End-to-end: a chat that triggers a guarded action stalls at the
-    WebApprovalHandler; resolving the request via ``resolve_approval``
-    unblocks it and the agent returns the success result.
-
-    This locks in the "approval queue is reachable from the web UI" flow.
+    """End-to-end across the Phase 3 pause/resume flow: the chat returns
+    202 immediately (no worker thread held); approving through the real
+    HTTP endpoint and resuming returns the agent's final result.
     """
     # FakeLLMClient will:
     #  1. route the supervisor decision (intercepted, returns "SQL")
@@ -305,55 +301,38 @@ def test_web_approval_flow_end_to_end():
         route_decision="SQL",
     )
     webapp_module._chat_llm_client_override = fake_llm
-
     uid = _make_user()
-    response_holder = {}
-
-    def chat_call():
-        with _authed_client(uid) as client:
-            response_holder["resp"] = client.post(
-                "/api/chat",
-                json={
-                    "message": "do the bulk change",
-                    "auto_approve": False,
-                    "approval_timeout": 10,
-                },
-            )
-
-    chat_thread = threading.Thread(target=chat_call)
-    chat_thread.start()
 
     try:
-        # Wait for the pending approval to land in the queue.
-        from approval.gate import get_pending_approvals, resolve_approval
+        with _authed_client(uid) as client:
+            chat = client.post("/api/chat", json={"message": "do the bulk change"})
+            assert chat.status_code == 202
+            pending = chat.json()
+            assert pending["status"] == "pending_approval"
+            approval_id = pending["approval_id"]
+            session_id = pending["session_id"]
 
-        pending = []
-        deadline = time.time() + 5
-        while time.time() < deadline and not pending:
-            pending = get_pending_approvals()
-            if not pending:
-                time.sleep(0.1)
+            status = client.get(f"/api/approval/{approval_id}/status")
+            assert status.status_code == 200
+            assert status.json()["status"] == "pending"
 
-        assert pending, "Expected at least one pending approval in the queue"
-        approval_id = pending[0]["approval_id"]
+            # Approve through the real queue endpoint (auth + CSRF).
+            token = _page_csrf_token(client)
+            approved = client.post(
+                f"/approvals/{approval_id}/approve", data={"csrf_token": token}
+            )
+            assert approved.status_code in (200, 303)
 
-        # Approve it via the database (the web UI does the same through
-        # ``/approvals/{id}/approve`` which calls resolve_approval).
-        assert resolve_approval(approval_id, "approved", decided_by="e2e_user")
-
-        chat_thread.join(timeout=15)
-        assert not chat_thread.is_alive(), "Chat request did not unblock in time"
-        assert response_holder["resp"].status_code == 200
-        body = response_holder["resp"].json()
-        assert body["response"] == "Approval flow completed."
+            resumed = client.post("/api/chat/resume", json={"session_id": session_id})
+            assert resumed.status_code == 200
+            assert resumed.json()["response"] == "Approval flow completed."
     finally:
         webapp_module._chat_llm_client_override = None
 
 
 def test_web_approval_queue_endpoint_resolves_pending():
     """The /approvals/{id}/approve HTTP endpoint resolves a pending request
-    and removes it from the queue, matching what the WebApprovalHandler
-    polling loop is waiting for.
+    and removes it from the queue, matching what a paused turn waits for.
     """
     uid = _make_user()
     approval_id, _ = _seed_pending_action(
@@ -372,10 +351,9 @@ def test_web_approval_queue_endpoint_resolves_pending():
         assert approval_id not in after.text
 
 
-def test_web_approval_timeout_returns_denial():
-    """When no decision is written before the timeout, the SQL tool returns
-    a denial, the agent surfaces that fact in its trace, and the final
-    response reflects the agent's next action.
+def test_web_approval_pause_resume_denial():
+    """A denied approval resumes into the agent's next action; resuming
+    while still pending returns 202 again instead of blocking.
     """
     fake_llm = FakeLLMClient(
         [
@@ -393,19 +371,28 @@ def test_web_approval_timeout_returns_denial():
 
     try:
         with _authed_client(uid) as client:
-            resp = client.post(
-                "/api/chat",
-                json={
-                    "message": "do the bulk change",
-                    "auto_approve": False,
-                    "approval_timeout": 1,
-                },
+            chat = client.post("/api/chat", json={"message": "do the bulk change"})
+            assert chat.status_code == 202
+            session_id = chat.json()["session_id"]
+            approval_id = chat.json()["approval_id"]
+
+            # Still undecided: resume says so without blocking.
+            early = client.post("/api/chat/resume", json={"session_id": session_id})
+            assert early.status_code == 202
+            assert early.json()["approval_id"] == approval_id
+
+            token = _page_csrf_token(client)
+            denied = client.post(
+                f"/approvals/{approval_id}/deny", data={"csrf_token": token}
             )
-        assert resp.status_code == 200
-        # The final text is the agent's "Done after denial." because the
-        # SQL tool was denied after the timeout, then the LLM was re-asked
-        # and produced a final answer.
-        assert resp.json()["response"] == "Done after denial."
+            assert denied.status_code in (200, 303)
+
+            final = client.post("/api/chat/resume", json={"session_id": session_id})
+            assert final.status_code == 200
+            # The final text is the agent's "Done after denial." because the
+            # SQL tool was denied, then the LLM was re-asked and produced a
+            # final answer.
+            assert final.json()["response"] == "Done after denial."
     finally:
         webapp_module._chat_llm_client_override = None
 
