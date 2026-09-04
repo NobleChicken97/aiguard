@@ -1,17 +1,9 @@
-import uuid
 import json
-from datetime import datetime, timezone
 from typing import List, Dict, Any
 
+from app_util import new_uuid as _uuid, now_utc as _now
 from db.database import get_connection
 
-
-def _now():
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _uuid():
-    return str(uuid.uuid4())
 
 
 class ShortTermMemory:

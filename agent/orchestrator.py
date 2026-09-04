@@ -1,20 +1,11 @@
-import uuid
 import json
-from datetime import datetime, timezone
 
 import config
 from agent.memory import ShortTermMemory, LongTermMemory, distill_facts_from_session
 from agent.trace import TraceLogger
 from agent.llm_client import ClaudeLLMClient
+from app_util import new_uuid as _uuid, now_utc as _now
 from guardrails.pii_guardrail import PIIGuardrail
-
-
-def _now():
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _uuid():
-    return str(uuid.uuid4())
 
 
 class Orchestrator:
