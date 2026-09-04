@@ -114,6 +114,22 @@ def source_db(tmp_path):
             "INSERT INTO app_trace_events (trace_id, session_id, event_type, data, timestamp) VALUES (?, ?, ?, ?, ?)",
             ("tr-1", "sess-1", "final_answer", '{"text": "done"}', "2026-03-01T00:00:05+00:00"),
         )
+        conn.execute(
+            "INSERT INTO app_users (user_id, email, pw_hash, role, created_at) VALUES (?, ?, ?, ?, ?)",
+            ("user-1", "migrate@test.local", "hashed", "user", "2026-03-01T00:00:06+00:00"),
+        )
+        conn.execute(
+            """INSERT INTO app_builder_runs
+               (run_id, table_name, sql_text, verdict, row_count, elapsed_ms, executed_at, user_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            ("run-1", "customers", "SELECT 1", "ALLOWED", 1, 0.5, "2026-03-01T00:00:07+00:00", "user-1"),
+        )
+        conn.execute(
+            """INSERT INTO app_pending_resumes
+               (call_id, approval_id, session_id, worker_name, messages, tool_name, tool_input, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            ("pcall-1", "appr-1", "sess-1", "SQLWorker", "[]", "sql_tool", "{}", "2026-03-01T00:00:08+00:00"),
+        )
         conn.commit()
     finally:
         conn.close()
@@ -129,11 +145,14 @@ def _pg_counts(conn):
             "orders",
             "order_items",
             "app_sessions",
+            "app_users",
             "app_messages",
             "app_tool_calls",
             "app_approval_requests",
+            "app_pending_resumes",
             "app_memory_facts",
             "app_trace_events",
+            "app_builder_runs",
         ]
     }
 
@@ -144,11 +163,14 @@ EXPECTED_COUNTS = {
     "orders": 1,
     "order_items": 1,
     "app_sessions": 1,
+    "app_users": 1,
     "app_messages": 1,
     "app_tool_calls": 1,
     "app_approval_requests": 1,
+    "app_pending_resumes": 1,
     "app_memory_facts": 1,
     "app_trace_events": 1,
+    "app_builder_runs": 1,
 }
 
 
