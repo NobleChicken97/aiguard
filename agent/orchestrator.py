@@ -248,6 +248,8 @@ class Orchestrator:
             # Facts persist indefinitely and are injected into future system
             # prompts, so they cross the same PII masking as query output.
             facts = [PIIGuardrail.mask_pii(f) for f in facts]
+            if config.PII_NER_ENABLED:
+                facts = [PIIGuardrail.mask_pii_ner(f) for f in facts]
             if facts:
                 self.long_term.save_facts(self.user_id, facts, self.session_id)
                 self.trace.log("facts_saved", {"count": len(facts), "facts": facts})

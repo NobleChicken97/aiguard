@@ -39,6 +39,23 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 ALLOWED_TABLES = {"customers", "products", "orders", "order_items"}
 
+# Column-level deny policy (Phase 2): {"table": {"deny": {"column", ...}}}.
+# Any query referencing a denied column — in SELECT, WHERE, JOIN, INSERT
+# column lists, or UPDATE targets, including via SELECT * expansion — is
+# BLOCKED outright (fail-closed, like the table allow-list).
+# Empty by default, deliberately: the demo schema has no truly sensitive
+# column (emails are already output-masked), so this ships as enforcement
+# machinery proven by tests, not theater. Example to enable:
+# COLUMN_POLICY = {"customers": {"deny": {"email"}}}
+COLUMN_POLICY = {}
+
+# NER second pass for PII masking (Phase 2, en_core_web_sm). Off by
+# default with measured reason: on this schema PERSON+GPE would mask
+# legitimate answers (10/10 customer names, 8/8 cities) and PERSON
+# false-positives on 2/10 product names. Enable (PII_NER_ENABLED=1) for
+# free-text-heavy data. Numbers: STATUS.md Phase 2.
+PII_NER_ENABLED = os.getenv("PII_NER_ENABLED", "0") == "1"
+
 DEMO_SCHEMA_DESCRIPTION = """\
 You have access to an e-commerce database with the following tables:
 

@@ -19,6 +19,10 @@ class PIIGuardrail:
     Patterns that fail their format check (e.g. credit card numbers that
     do not pass the Luhn checksum) are left untouched to keep the false
     positive rate low.
+
+    The optional NER second pass (``mask_pii_ner``, Phase 2) catches names
+    and places regexes cannot see. It fails safe: a missing model leaves
+    the text to the regex layer instead of raising.
     """
 
     EMAIL_REGEX = re.compile(r"([a-zA-Z0-9_.+-]+)@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
@@ -89,3 +93,44 @@ class PIIGuardrail:
         text = cls.IPV4_REGEX.sub("***.***.***.***", text)
         text = cls.CC_GROUP_REGEX.sub(cls._mask_credit_card, text)
         return text
+
+    # ------------------------------------------------------------------
+    # NER second pass (Phase 2)
+    # ------------------------------------------------------------------
+
+    #: Entity types masked by ``mask_pii_ner``. PERSON first (highest
+    #: precision on name-like data); GPE/ORG included because street-level
+    #: addresses and employers leak through regexes untouched. Calibrated
+    #: by the spike in Phase 2 — see STATUS.md for measured numbers.
+    NER_ENTITIES = ("PERSON", "GPE", "ORG")
+
+    _NER_MODEL = None
+
+    @classmethod
+    def _ner_model(cls):
+        if cls._NER_MODEL is None:
+            import spacy
+
+            cls._NER_MODEL = spacy.load("en_core_web_sm")
+        return cls._NER_MODEL
+
+    @classmethod
+    def mask_pii_ner(cls, text, entities=None):
+        """Mask spaCy named entities (default: PERSON/GPE/ORG) with ``***``.
+
+        Runs right-to-left over spans so offsets stay valid. A missing or
+        unloadable model returns the text unchanged (the regex layer still
+        stands) instead of raising — masking must never break answering.
+        """
+        if not isinstance(text, str):
+            text = str(text)
+        wanted = set(entities or cls.NER_ENTITIES)
+        try:
+            doc = cls._ner_model()(text)
+        except Exception:
+            return text
+        out = text
+        for ent in sorted(doc.ents, key=lambda e: e.start_char, reverse=True):
+            if ent.label_ in wanted:
+                out = out[:ent.start_char] + "***" + out[ent.end_char:]
+        return out

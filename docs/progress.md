@@ -400,3 +400,14 @@ Per the approved design (HMAC cookies, login-everywhere, register-UI demos, buil
 4. **Finding 5 fixed**: system prompt (schema + LTM facts) now reaches both workers; `axolotls` regression test proves session-1 facts land in session-2 prompts.
 5. **Tests**: new `tests/test_authz.py` (19 tests) + 7 adjacent suites retrofitted (incl. per-IP→per-user ratelimit semantics). Full suite: **215 passed / 8 skipped**; ruff + pip check clean.
 6. **Follow-ups queued**: login/register CSRF, global-counter documentation (by design), test-DB isolation (pre-existing).
+
+## Phase 2 — Guardrail Depth (Sep 4, 2026)
+**Status:** ✅ Completed
+
+Per the approved design (BLOCK, framework with empty default):
+
+1. **Column policy**: `COLUMN_POLICY` in `config.py` (empty default, documented); AST-level enforcement with alias resolution, `SELECT *` expansion against live schema (fail-closed when unknown), whole-row INSERT rule. INSERT volume gate mirrors the bulk model (threshold + fail-closed unknown counts).
+2. **Anomaly logging**: log-only `query_shape_anomaly` trace events (>2 tables / >8 columns / star) — future abuse-detection foundation.
+3. **NER**: spaCy `en_core_web_sm` second pass behind `PII_NER_ENABLED` (default off with measured reason); per-type precision/recall measured on seed and locked by tests; missing model fails safe.
+4. **Tests**: 51 new across `test_column_policy.py`, `test_pii_ner.py`, `test_redteam_phase2.py` (self-written battery; external-5 item stays OPEN for a human). Red-team caught + fixed a real INSERT-list bypass pre-merge.
+5. Full suite: **266 passed / 8 skipped**; ruff + pip check clean.

@@ -3,7 +3,15 @@ from collections import OrderedDict
 import threading
 
 from tools.base import Tool, ToolResult
-from guardrails.sql_guardrail import SQLGuardrail, VERDICT_REQUIRES_APPROVAL, VERDICT_ALLOWED
+from guardrails.sql_guardrail import (
+    SHAPE_COLUMN_LIMIT,
+    SHAPE_TABLE_LIMIT,
+    SQLGuardrail,
+    VERDICT_REQUIRES_APPROVAL,
+    VERDICT_ALLOWED,
+    get_allowed_schema_columns,
+    query_shape,
+)
 from guardrails.pii_guardrail import PIIGuardrail
 from db.database import get_connection
 import config
@@ -62,7 +70,9 @@ class SQLTool(Tool):
 
     def __init__(self, approval_handler=None):
         super().__init__()
-        self.guardrail = SQLGuardrail()
+        # Live schema enables precise SELECT * expansion in the column
+        # policy; unknown schema only ever fails closed, never open.
+        self.guardrail = SQLGuardrail(schema_columns=get_allowed_schema_columns())
         self.approval_handler = approval_handler
         self._query_cache = _ThreadSafeLRUCache(config.SQL_QUERY_CACHE_SIZE)
 
@@ -119,6 +129,16 @@ class SQLTool(Tool):
             approval_needed = self._check_row_count(sql, result, call_id, session_id, _trace)
             if approval_needed is not None:
                 return approval_needed
+
+        # Log-only anomaly signal (never blocks): unusually wide queries get
+        # a trace event for future abuse-detection work.
+        shape = query_shape(sql)
+        if _trace and (
+            len(shape["tables"]) > SHAPE_TABLE_LIMIT
+            or shape["columns"] > SHAPE_COLUMN_LIMIT
+            or shape["star"]
+        ):
+            _trace.log("query_shape_anomaly", {"call_id": call_id, **shape})
 
         return self._execute_sql(sql, call_id, result)
 
@@ -265,4 +285,7 @@ class SQLTool(Tool):
             lines.append(f"... ({len(rows) - max_rows} more rows)")
             
         formatted_text = "\n".join(lines)
-        return PIIGuardrail.mask_pii(formatted_text)
+        masked = PIIGuardrail.mask_pii(formatted_text)
+        if config.PII_NER_ENABLED:
+            masked = PIIGuardrail.mask_pii_ner(masked)
+        return masked

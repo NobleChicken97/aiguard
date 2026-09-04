@@ -482,10 +482,16 @@ def run_builder_query(spec, user_id=None):
     finally:
         conn.close()
 
-    masked_rows = [
-        [PIIGuardrail.mask_pii(cell) if isinstance(cell, str) else cell for cell in row_cells]
-        for row_cells in cells
-    ]
+    masked_rows = []
+    for row_cells in cells:
+        masked_row = []
+        for cell in row_cells:
+            if isinstance(cell, str):
+                cell = PIIGuardrail.mask_pii(cell)
+                if config.PII_NER_ENABLED:
+                    cell = PIIGuardrail.mask_pii_ner(cell)
+            masked_row.append(cell)
+        masked_rows.append(masked_row)
     elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
     _audit_run(spec.table, sql, result.verdict, len(masked_rows), elapsed_ms, user_id=user_id)
     return {

@@ -111,3 +111,16 @@ Shipped, full suite green: **215 passed (196 + 19 new), 8 PG-skipped**; ruff + p
 5. `tests/test_authz.py`: 19 tests (register×4, login/logout, anon redirects, tamper/expiry 401s, 7-table isolation incl. builder attribution + admin cross-user demo, per-user throttle, fact persistence).
 6. Deviation from plan, with reason: **bcrypt used directly, passlib dropped** — passlib 1.7.4's handler raises against bcrypt>=4.1 (verified live); same primitive, one less trap dependency.
 7. Known follow-ups (not fixed): login/register POSTs have no CSRF (login-CSRF is marginal, queued); `/api/stats` counters stay global aggregates by design (row data scoped); test suite still resets the real dev DB (pre-existing pattern).
+
+## Phase 2 — Guardrail depth (2026-09-04)
+
+Shipped, full suite green: **266 passed (215 + 51 new), 8 PG-skipped**; ruff + pip check clean.
+
+1. **COLUMN_POLICY** (`config.py`, empty default — demo schema has no truly sensitive column; enforcement machinery, not theater): any reference to a denied column (SELECT/WHERE/JOIN/ORDER/aggregates/INSERT targets/UPDATE targets, incl. `SELECT *` expansion against live schema, alias resolution, fail-closed on unknown schema) → BLOCKED. Decisions: BLOCK (not redact), framework-only (no schema change).
+2. **INSERT volume gate** mirrors the bulk model: >RISKY_ROW_THRESHOLD rows → approval; INSERT..SELECT (unknown count) → approval (fail-closed); explicit lists checked per-column; no-list whole-row writes BLOCK when the table denies anything.
+3. **Anomaly logging** (log-only, never blocks): `query_shape_anomaly` trace event when >2 tables, >8 columns, or star present.
+4. **NER second pass** (spaCy en_core_web_sm 3.8.0, pinned; missing model fails safe to regex layer). Measured on seed:
+   PERSON 10/10 names (FP 2/10 products: Wireless Mouse, Desk Lamp) · GPE 8/8 cities, 0 elsewhere · ORG 0 signal · obfuscation variants (caps/spacing/initials/hyphen) 7/7 masked · known slip: isolated uncommon name w/o context ("Henrietta Lacks") missed — regex + column policy are the backstops.
+   Default OFF (`PII_NER_ENABLED=0`) with measured reason: on this schema PERSON+GPE would mask legitimate answers; wired into sql_tool/builder/memory-facts behind the flag.
+5. **Tests**: `test_column_policy.py` + `test_pii_ner.py` + `test_redteam_phase2.py` (20 self-written bypass shapes, all blocked; benign neighbors allowed). Red-team caught a real gap pre-merge: explicit INSERT column lists (Schema identifiers, not Column nodes) bypassed the check — fixed.
+6. **OPEN, needs a human**: 5 externally-written adversarial prompts (prove independence). Hand the repo to someone who has not read `sql_guardrail.py`; record their prompts + who/when here.
