@@ -7,6 +7,7 @@ Conventions under test:
 - admins may read across users (cross-user approval-queue demo)
 """
 
+import re
 import sys
 from uuid import uuid4
 
@@ -43,6 +44,18 @@ def _authed_client(user_id):
     return client
 
 
+_CSRF_RE = re.compile(r'name="csrf_token" value="([^"]+)"')
+
+
+def _auth_post(client, path, data):
+    """POST a login/register form the way the browser does: fetch the page
+    for a fresh CSRF token, then submit it with the form."""
+    page = client.get(path)
+    assert page.status_code == 200
+    token = _CSRF_RE.search(page.text).group(1)
+    return client.post(path, data={**data, "csrf_token": token})
+
+
 def _chat_session_id(client, text="hello"):
     """Drive one chat turn through the override LLM; return the session_id."""
     webapp_module._chat_llm_client_override = FakeLLMClient(
@@ -62,8 +75,9 @@ def _chat_session_id(client, text="hello"):
 
 def test_register_creates_account_and_logs_in():
     with TestClient(app) as client:
-        resp = client.post(
-            "/register", data={"email": "alice@test.local", "password": "testpass123"}
+        resp = _auth_post(
+            client, "/register",
+            {"email": "alice@test.local", "password": "testpass123"},
         )
         assert resp.status_code == 200  # followed redirect into /chat
         assert SESSION_COOKIE in client.cookies
@@ -73,8 +87,9 @@ def test_register_creates_account_and_logs_in():
 def test_register_rejects_duplicate_email():
     _make_user(email="dup@test.local")
     with TestClient(app) as client:
-        resp = client.post(
-            "/register", data={"email": "dup@test.local", "password": "testpass123"}
+        resp = _auth_post(
+            client, "/register",
+            {"email": "dup@test.local", "password": "testpass123"},
         )
         assert resp.status_code == 400
         assert "already registered" in resp.text
@@ -82,8 +97,9 @@ def test_register_rejects_duplicate_email():
 
 def test_register_rejects_short_password():
     with TestClient(app) as client:
-        resp = client.post(
-            "/register", data={"email": "new@test.local", "password": "short"}
+        resp = _auth_post(
+            client, "/register",
+            {"email": "new@test.local", "password": "short"},
         )
         assert resp.status_code == 400
         assert "8 characters" in resp.text
@@ -91,24 +107,37 @@ def test_register_rejects_short_password():
 
 def test_register_rejects_bad_email():
     with TestClient(app) as client:
-        resp = client.post(
-            "/register", data={"email": "not-an-email", "password": "testpass123"}
+        resp = _auth_post(
+            client, "/register",
+            {"email": "not-an-email", "password": "testpass123"},
         )
         assert resp.status_code == 400
         assert "valid email" in resp.text
 
 
+def test_auth_posts_reject_missing_csrf_token():
+    with TestClient(app) as client:
+        assert client.post(
+            "/register", data={"email": "x@test.local", "password": "testpass123"}
+        ).status_code == 403
+        assert client.post(
+            "/login", data={"email": "x@test.local", "password": "testpass123"}
+        ).status_code == 403
+
+
 def test_login_round_trip_and_logout():
     _make_user(email="bob@test.local", password="bobspass1")
     with TestClient(app) as client:
-        bad = client.post(
-            "/login", data={"email": "bob@test.local", "password": "wrongpass1"}
+        bad = _auth_post(
+            client, "/login",
+            {"email": "bob@test.local", "password": "wrongpass1"},
         )
         assert bad.status_code == 401
         assert SESSION_COOKIE not in client.cookies
 
-        good = client.post(
-            "/login", data={"email": "bob@test.local", "password": "bobspass1"}
+        good = _auth_post(
+            client, "/login",
+            {"email": "bob@test.local", "password": "bobspass1"},
         )
         assert good.status_code == 200
         assert SESSION_COOKIE in client.cookies

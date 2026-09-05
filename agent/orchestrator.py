@@ -247,6 +247,8 @@ class Orchestrator:
             pending.messages,
             pending.tool_name,
             pending.tool_input,
+            int(getattr(self._budget_client, "total_input_tokens", 0) or 0),
+            int(getattr(self._budget_client, "total_output_tokens", 0) or 0),
         )
         self.trace.log("approval_paused", {
             "approval_id": pending.approval_id,
@@ -274,6 +276,12 @@ class Orchestrator:
         saved = load_pending_resume(session_id)
         if saved is None:
             raise ValueError(f"No paused turn found for session {session_id}")
+
+        # Continue (not restart) budget accounting across the pause: the
+        # resume drive adds to the pre-pause totals saved above.
+        if self._budget_client is not None:
+            self._budget_client.total_input_tokens = int(saved.get("input_tokens") or 0)
+            self._budget_client.total_output_tokens = int(saved.get("output_tokens") or 0)
 
         decision, _, risk_reason = get_approval_status(saved["approval_id"])
         if decision is None:

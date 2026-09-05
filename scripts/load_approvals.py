@@ -51,12 +51,20 @@ class AlwaysApprovalLLM:
 
 def _setup_user(i):
     """Register one user; returns its session cookie (untimed setup)."""
+    import re as _re
+
     from fastapi.testclient import TestClient
 
     client = TestClient(app)
+    page = client.get("/register")
+    token = _re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
     reg = client.post(
         "/register",
-        data={"email": f"load{i:03d}@test.local", "password": "loadpass123"},
+        data={
+            "email": f"load{i:03d}@test.local",
+            "password": "loadpass123",
+            "csrf_token": token,
+        },
     )
     assert reg.status_code == 200, f"register -> {reg.status_code}"
     return dict(client.cookies)

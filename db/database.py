@@ -50,6 +50,32 @@ def _ensure_builder_user_column(conn):
         if "user_id" not in cols:
             conn.execute("ALTER TABLE app_builder_runs ADD COLUMN user_id TEXT")
 
+def _ensure_resume_token_columns(conn):
+    """Migrate pre-F3 databases: token counters on app_pending_resumes.
+
+    Same ALTER-when-missing pattern as the builders above; DEFAULT 0
+    backfills old rows so resume accounting starts from zero, not NULL.
+    """
+    wanted = {
+        "input_tokens": "INTEGER NOT NULL DEFAULT 0",
+        "output_tokens": "INTEGER NOT NULL DEFAULT 0",
+    }
+    if _is_postgres():
+        existing = {
+            r["column_name"]
+            for r in conn.execute(
+                """SELECT column_name FROM information_schema.columns
+                   WHERE table_name = 'app_pending_resumes'"""
+            ).fetchall()
+        }
+    else:
+        existing = {
+            r["name"] for r in conn.execute("PRAGMA table_info(app_pending_resumes)").fetchall()
+        }
+    for col, ddl in wanted.items():
+        if col not in existing:
+            conn.execute(f"ALTER TABLE app_pending_resumes ADD COLUMN {col} {ddl}")
+
 def _init_pg_pool():
     global _pg_pool
     if _pg_pool is None and _is_postgres():
@@ -141,6 +167,7 @@ def initialize_db():
             conn.executescript(demo_schema_pg)
             _ensure_session_activity_column(conn)
             _ensure_builder_user_column(conn)
+            _ensure_resume_token_columns(conn)
             conn.commit()
         finally:
             conn.close()
@@ -151,6 +178,7 @@ def initialize_db():
             conn.executescript(DEMO_SCHEMA)
             _ensure_session_activity_column(conn)
             _ensure_builder_user_column(conn)
+            _ensure_resume_token_columns(conn)
             conn.commit()
         finally:
             conn.close()

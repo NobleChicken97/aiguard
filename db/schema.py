@@ -84,6 +84,8 @@ CREATE TABLE IF NOT EXISTS app_pending_resumes (
     messages     TEXT NOT NULL,
     tool_name    TEXT NOT NULL,
     tool_input   TEXT NOT NULL,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT NOT NULL,
     FOREIGN KEY (session_id) REFERENCES app_sessions(session_id)
 );

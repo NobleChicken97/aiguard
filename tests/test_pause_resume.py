@@ -21,6 +21,8 @@ from approval.gate import (
     AsyncApprovalHandler,
     PendingApproval,
     load_pending_resume,
+    resolve_approval,
+    save_pending_resume,
 )
 from auth import SESSION_COOKIE, create_user, sign_session
 from db.database import reset_db
@@ -207,3 +209,120 @@ def test_second_gate_repauses_with_fresh_state():
             assert load_pending_resume(sid) is None  # consumed
     finally:
         webapp_module._chat_llm_client_override = None
+
+
+def test_janitor_purges_only_decided_stale_rows():
+    """Abandoned turns (decided + older than TTL) are purged opportunistically
+    on the next pause; undecided rows are never touched."""
+    from db.database import get_connection
+
+    conn = get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO app_sessions (session_id, user_id, started_at, status) VALUES (?, ?, ?, ?)",
+            ("sess-jan", "jan_user", "2020-01-01T00:00:00+00:00", "active"),
+        )
+        for call_id, approval_id, decision in [
+            ("c-old-decided", "a-old-decided", "approved"),
+            ("c-old-pending", "a-old-pending", None),
+        ]:
+            conn.execute(
+                "INSERT INTO app_tool_calls (call_id, session_id, tool_name, input, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (call_id, "sess-jan", "sql_tool", "{}", "executed", "2020-01-01T00:00:00+00:00"),
+            )
+            conn.execute(
+                """INSERT INTO app_approval_requests
+                   (approval_id, call_id, session_id, risk_reason, decided_by, decision, decided_at, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (approval_id, call_id, "sess-jan", "r", "u", decision,
+                 "2020-01-02T00:00:00+00:00" if decision else None,
+                 "2020-01-01T00:00:00+00:00"),
+            )
+            conn.execute(
+                """INSERT INTO app_pending_resumes
+                   (call_id, approval_id, session_id, worker_name, messages, tool_name, tool_input,
+                    input_tokens, output_tokens, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (call_id, approval_id, "sess-jan", "SQLWorker", "[]", "sql_tool", "{}",
+                 5, 5, "2020-01-01T00:00:00+00:00"),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Any new pause runs the janitor inside the same transaction.
+    save_pending_resume("c-new", "a-old-pending", "sess-jan", "SQLWorker", [], "sql_tool", {})
+
+    conn = get_connection()
+    try:
+        remaining = {
+            r["call_id"] for r in conn.execute("SELECT call_id FROM app_pending_resumes").fetchall()
+        }
+    finally:
+        conn.close()
+    assert "c-old-decided" not in remaining
+    assert {"c-old-pending", "c-new"} <= remaining
+
+
+def test_token_accounting_continues_across_resume():
+    """Pause persists usage; resume seeds (not restarts) the budget client."""
+    orch = Orchestrator(
+        llm_client=FakeLLMClient(
+            [FakeLLMClient.tool_use_response("sql_tool", {"sql": MULTI}, "toolu_tok")],
+            route_decision="SQL",
+        ),
+        approval_handler=AsyncApprovalHandler(),
+        user_id="tok_user",
+    )
+    out = orch.run("do the bulk thing")
+    assert isinstance(out, PendingApproval)
+    saved = load_pending_resume(out.session_id)
+    assert saved["input_tokens"] > 0 and saved["output_tokens"] > 0
+    assert resolve_approval(out.approval_id, "approved")
+
+    orch2 = Orchestrator(
+        llm_client=FakeLLMClient([FakeLLMClient.text_response("counted.")]),
+        approval_handler=AsyncApprovalHandler(),
+        user_id="tok_user",
+    )
+    assert orch2.resume(out.session_id) == "counted."
+    assert orch2.total_input_tokens > saved["input_tokens"]
+    assert orch2.total_output_tokens > saved["output_tokens"]
+
+
+def test_initialize_db_migrates_legacy_resume_table(tmp_path, monkeypatch):
+    import sqlite3
+
+    import config
+    from db.database import initialize_db
+
+    legacy_db = tmp_path / "legacy-resume.db"
+    monkeypatch.setattr(config, "DB_PATH", str(legacy_db))
+    conn = sqlite3.connect(legacy_db)
+    conn.execute(
+        """CREATE TABLE app_pending_resumes (
+               call_id TEXT PRIMARY KEY, approval_id TEXT NOT NULL,
+               session_id TEXT NOT NULL, worker_name TEXT NOT NULL,
+               messages TEXT NOT NULL, tool_name TEXT NOT NULL,
+               tool_input TEXT NOT NULL, created_at TEXT NOT NULL)"""
+    )
+    conn.execute(
+        "INSERT INTO app_pending_resumes VALUES "
+        "('c1', 'a1', 's1', 'SQLWorker', '[]', 'sql_tool', '{}', '2024-01-01T00:00:00+00:00')"
+    )
+    conn.commit()
+    conn.close()
+
+    initialize_db()
+
+    conn = sqlite3.connect(legacy_db)
+    conn.row_factory = sqlite3.Row
+    try:
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(app_pending_resumes)").fetchall()}
+        row = conn.execute(
+            "SELECT input_tokens, output_tokens FROM app_pending_resumes WHERE call_id = 'c1'"
+        ).fetchone()
+    finally:
+        conn.close()
+    assert {"input_tokens", "output_tokens"} <= cols
+    assert (row["input_tokens"], row["output_tokens"]) == (0, 0)

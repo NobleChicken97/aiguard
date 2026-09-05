@@ -148,7 +148,7 @@ class AsyncApprovalHandler(ApprovalHandler):
         )
 
 
-def save_pending_resume(call_id, approval_id, session_id, worker_name, messages, tool_name, tool_input):
+def save_pending_resume(call_id, approval_id, session_id, worker_name, messages, tool_name, tool_input, input_tokens=0, output_tokens=0):
     """Persist one resume row per paused turn (DELETE+INSERT: dialect-free
     upsert, mirroring the codebase's SQLite/PG discipline)."""
     import json as _json
@@ -158,8 +158,9 @@ def save_pending_resume(call_id, approval_id, session_id, worker_name, messages,
         conn.execute("DELETE FROM app_pending_resumes WHERE call_id = ?", (call_id,))
         conn.execute(
             """INSERT INTO app_pending_resumes
-               (call_id, approval_id, session_id, worker_name, messages, tool_name, tool_input, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (call_id, approval_id, session_id, worker_name, messages, tool_name, tool_input,
+                input_tokens, output_tokens, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 call_id,
                 approval_id,
@@ -168,12 +169,39 @@ def save_pending_resume(call_id, approval_id, session_id, worker_name, messages,
                 _json.dumps(messages, default=str),
                 tool_name,
                 _json.dumps(tool_input, default=str),
+                int(input_tokens or 0),
+                int(output_tokens or 0),
                 _now(),
             ),
         )
+        _janitor_stale_resumes(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+#: Resume rows outlive their usefulness once the human has decided AND the
+#: user never came back: a day-old decided row means an abandoned turn
+#: (resuming it after purge 404s honestly instead of working). Pending
+#: (undecided) rows are never purged — the human may still decide.
+PENDING_RESUME_TTL_HOURS = 24
+
+
+def _janitor_stale_resumes(conn):
+    """Opportunistic purge of abandoned resume rows (decided + older than
+    TTL). Runs inside save_pending_resume's transaction: no scheduler, no
+    background thread, negligible cost (one indexed-range delete)."""
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=PENDING_RESUME_TTL_HOURS)).isoformat()
+    conn.execute(
+        """DELETE FROM app_pending_resumes
+           WHERE created_at < ?
+           AND EXISTS (SELECT 1 FROM app_approval_requests ar
+                       WHERE ar.approval_id = app_pending_resumes.approval_id
+                       AND ar.decision IS NOT NULL)""",
+        (cutoff,),
+    )
 
 
 def load_pending_resume(session_id):
@@ -184,7 +212,7 @@ def load_pending_resume(session_id):
     try:
         row = conn.execute(
             """SELECT call_id, approval_id, session_id, worker_name, messages,
-                      tool_name, tool_input, created_at
+                      tool_name, tool_input, input_tokens, output_tokens, created_at
                FROM app_pending_resumes WHERE session_id = ?
                ORDER BY created_at DESC LIMIT 1""",
             (session_id,),

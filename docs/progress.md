@@ -463,3 +463,10 @@ Per the approved design (clarify on garbage):
 2. README "Known Limitations & Roadmap" table (solid / stubbed / human-item / queued, each linked).
 3. `docs/DEMO.md`: 2–3 minute shot-by-shot demo script.
 4. Human items remaining: external adversarial-5 prompts, demo video recording, optional `LLM_API_KEY` repo secret.
+
+## Queued Follow-Ups Closed (Sep 4, 2026)
+**Status:** ✅ Completed
+
+1. **Auth CSRF**: login/register POSTs carry the double-submit token (403 otherwise); logout intentionally token-less.
+2. **Resume janitor**: opportunistic in-transaction purge of decided rows older than 24h; undecided rows never touched.
+3. **Resume budgets**: token counters persisted on pause and restored on resume (auto-migrated columns); 3 new pinning tests.

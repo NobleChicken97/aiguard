@@ -497,25 +497,40 @@ def _csrf_ok(request: Request, submitted_token: str) -> bool:
 def login_page(request: Request):
     if get_optional_user(request) is not None:
         return RedirectResponse(url="/chat", status_code=303)
-    return templates.TemplateResponse(
+    return _auth_page(request, "login.html")
+
+
+def _auth_page(request: Request, template, error=None, status_code=200):
+    """Render a login/register form with a fresh CSRF double-submit token."""
+    token = secrets.token_urlsafe(32)
+    response = templates.TemplateResponse(
         request=request,
-        name="login.html",
-        context={"request": request, "error": None},
+        name=template,
+        context={"request": request, "error": error, "csrf_token": token},
+        status_code=status_code,
     )
+    response.set_cookie(CSRF_COOKIE, token, httponly=True, samesite="lax")
+    return response
 
 
 @app.post("/login", response_class=HTMLResponse)
-def login_submit(request: Request, email: str = Form(""), password: str = Form("")):
+def login_submit(
+    request: Request,
+    email: str = Form(""),
+    password: str = Form(""),
+    csrf_token: str = Form(""),
+):
+    if not _csrf_ok(request, csrf_token):
+        return _auth_page(request, "login.html",
+                          error="Invalid or expired form. Please try again.",
+                          status_code=403)
     # Identical failure shape for unknown-email vs wrong-password (see
     # auth.authenticate) so login cannot enumerate accounts.
     user = authenticate(email, password)
     if user is None:
-        return templates.TemplateResponse(
-            request=request,
-            name="login.html",
-            context={"request": request, "error": "Invalid email or password."},
-            status_code=401,
-        )
+        return _auth_page(request, "login.html",
+                          error="Invalid email or password.",
+                          status_code=401)
     response = RedirectResponse(url="/chat", status_code=303)
     response.set_cookie(SESSION_COOKIE, sign_session(user["user_id"]), httponly=True, samesite="lax")
     return response
@@ -525,24 +540,26 @@ def login_submit(request: Request, email: str = Form(""), password: str = Form("
 def register_page(request: Request):
     if get_optional_user(request) is not None:
         return RedirectResponse(url="/chat", status_code=303)
-    return templates.TemplateResponse(
-        request=request,
-        name="register.html",
-        context={"request": request, "error": None},
-    )
+    return _auth_page(request, "register.html")
 
 
 @app.post("/register", response_class=HTMLResponse)
-def register_submit(request: Request, email: str = Form(""), password: str = Form("")):
+def register_submit(
+    request: Request,
+    email: str = Form(""),
+    password: str = Form(""),
+    csrf_token: str = Form(""),
+):
+    if not _csrf_ok(request, csrf_token):
+        return _auth_page(request, "register.html",
+                          error="Invalid or expired form. Please try again.",
+                          status_code=403)
     try:
         user_id = create_user(email, password)
     except ValueError as e:
-        return templates.TemplateResponse(
-            request=request,
-            name="register.html",
-            context={"request": request, "error": str(e)},
-            status_code=400,
-        )
+        return _auth_page(request, "register.html",
+                          error=str(e),
+                          status_code=400)
     response = RedirectResponse(url="/chat", status_code=303)
     response.set_cookie(SESSION_COOKIE, sign_session(user_id), httponly=True, samesite="lax")
     return response

@@ -20,6 +20,7 @@
       </div>
       {% endif %}
       <form method="post" action="/register">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="stack">
           <label class="muted" for="register-email">Email
             <input id="register-email" name="email" type="email" required autocomplete="email"

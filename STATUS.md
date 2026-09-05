@@ -175,3 +175,9 @@ Decision (user): explicit mock now; live integration needs a provider key nobody
 | T02 | Unpushed, placeholder badge, red CI | Pushed, real badge, all gates green (incl. PG) | CI run history |
 
 Still human: external adversarial-5 prompts, demo video recording, optional `LLM_API_KEY` repo secret (enables manual live-smoke gate).
+
+## Queued follow-ups closed (2026-09-04)
+
+1. **Login/register CSRF**: auth forms now use the same double-submit cookie pattern as approvals (fresh token per GET, 403 + retryable error page on mismatch). Logout stays token-less deliberately (logout-CSRF impact is nuisance-only). 20 authz tests (incl. a 403-without-token test); load script submits like the browser.
+2. **Resume janitor**: `save_pending_resume` opportunistically purges rows that are both decided and older than 24h (`PENDING_RESUME_TTL_HOURS`) in-transaction — no scheduler, no thread. Undecided rows are never purged. Late resume after purge 404s honestly.
+3. **Token accounting across resume**: `app_pending_resumes` gained `input_tokens`/`output_tokens` (auto-migrated, DEFAULT 0); pause persists usage, resume seeds (not restarts) the budget client. Pinned by test (strictly-greater totals) + a legacy-table migration test.
