@@ -101,7 +101,7 @@ def main(argv=None):
     # No TestClient lifespan runs here, so mirror what it configures.
     from webapp_ratelimit import configure as configure_ratelimit
 
-    configure_ratelimit(chat_per_min=30, sse_max_per_ip=3)
+    configure_ratelimit(chat_per_min=30, sse_max_per_ip=3, auth_per_min=0)
     webapp_module._chat_llm_client_override = AlwaysApprovalLLM()
 
     # Warm the Redis verdict cache once so timed turns measure gate + DB

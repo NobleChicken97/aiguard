@@ -183,14 +183,41 @@ def initialize_db():
         finally:
             conn.close()
 
+def _drop_all_tables(path):
+    """Windows-safe wipe: drop every table even if other handles hold the
+    file open. `os.remove(path)` fails with a locked-file PermissionError
+    on Windows whenever a connection leaks (the Sep 2026 audit found
+    several), and reset_db used to swallow that and silently keep stale
+    rows, corrupting suite isolation. DROP works under WAL with readers."""
+    conn = sqlite3.connect(path, check_same_thread=False)
+    try:
+        conn.execute("PRAGMA busy_timeout=5000")
+        conn.execute("PRAGMA foreign_keys=OFF")
+        tables = [
+            r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            ).fetchall()
+        ]
+        for t in tables:
+            conn.execute(f'DROP TABLE IF EXISTS "{t}"')
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def reset_db():
     if not _is_postgres():
         path = get_db_path()
+        removed = False
         if os.path.exists(path):
             try:
                 os.remove(path)
+                removed = True
             except Exception:
-                pass
+                removed = False
+        if not removed and os.path.exists(path):
+            # Fallback that works with leaked handles (see _drop_all_tables).
+            _drop_all_tables(path)
     initialize_db()
 
 

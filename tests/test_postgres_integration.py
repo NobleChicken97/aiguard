@@ -143,3 +143,24 @@ class TestPostgresDataLayer:
         assert resolve_approval(approval_id, "approved") is True
         # Second resolution must not report success (already decided).
         assert resolve_approval(approval_id, "denied") is False
+
+    def test_sqltool_select_renders_values_not_headers(self, pg_env):
+        """Regression (caught live in prod, Sep 2026): `_format_rows`
+        iterated rows positionally — correct for sqlite3.Row (values) but
+        psycopg2 RealDictRow iterates KEYS, so every PG SELECT rendered the
+        header as data. Existing PG tests only ever indexed by key, which is
+        why CI stayed green around it."""
+        from db.database import initialize_db
+        from db.seed import seed_demo_data
+        from tools.sql_tool import SQLTool
+
+        initialize_db()
+        seed_demo_data()
+
+        result = SQLTool().execute(
+            sql="SELECT name FROM customers WHERE city = 'Chicago' ORDER BY name",
+            _call_id="pg-format-1",
+        )
+        assert result.status == "success"
+        assert "Carol White" in result.output
+        assert "Henry Wilson" in result.output

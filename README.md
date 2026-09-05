@@ -358,6 +358,7 @@ SESSION_IDLE_MINUTES=15      # dashboard "active" = activity within this window
 SQL_QUERY_CACHE_SIZE=128    # bounded LRU for repeated SELECTs (0 disables)
 CHAT_RATE_PER_MIN=30         # per-user cap on /api/chat (0 disables; IP fallback pre-auth)
 SSE_MAX_PER_IP=3             # per-user cap on /api/stream (0 disables)
+AUTH_RATE_PER_MIN=30         # per-IP cap on /login + /register (0 disables)
 LOG_LEVEL=INFO               # DEBUG | INFO | WARNING | ERROR
 LOG_FORMAT=text              # text (default) or json (one object per line)
 

@@ -35,6 +35,12 @@ def _make_user(password="testpass123"):
     return create_user(f"{uuid4().hex[:8]}@test.local", password)
 
 
+def _uuid():
+    from uuid import uuid4
+
+    return uuid4().hex[:8]
+
+
 def _authed_client(user_id):
     client = TestClient(app)
     client.cookies.set(SESSION_COOKIE, sign_session(user_id))
@@ -126,3 +132,24 @@ def test_deployment_documents_secrets_management():
     assert "Secrets Manager" in text
     assert "SESSION_SECRET" in text
     assert "never commit it" in text
+
+
+def test_robots_txt_and_favicon_public():
+    with TestClient(app) as client:
+        robots = client.get("/robots.txt")
+        assert robots.status_code == 200
+        assert "Disallow: /" in robots.text
+        icon = client.get("/favicon.ico")
+        assert icon.status_code == 200
+        assert icon.headers["content-type"].startswith("image/")
+
+
+def test_seo_meta_present_in_pages():
+    uid = create_user(f"{_uuid()}@test.local", "testpass123")
+    with _authed_client(uid) as client:
+        chat = client.get("/chat")
+        assert chat.status_code == 200
+        assert 'name="description"' in chat.text
+        assert 'property="og:title"' in chat.text
+        assert 'rel="canonical"' in chat.text
+        assert 'href="/favicon.ico"' in chat.text

@@ -289,10 +289,18 @@ class SQLTool(Tool):
             conn.close()
 
     def _format_rows(self, columns, rows, max_rows=50):
+        # Index by column NAME, never by position/iteration: sqlite3.Row
+        # iterates values but psycopg2 RealDictRow iterates KEYS, so `for v
+        # in row` silently returns the header as data on PostgreSQL (caught
+        # live in prod, Sep 2026 — every PG SELECT rendered column names).
         lines = [" | ".join(columns)]
         lines.append("-" * len(lines[0]))
         for row in rows[:max_rows]:
-            lines.append(" | ".join(str(v) for v in row))
+            try:
+                values = [row[c] for c in columns]
+            except (KeyError, IndexError, TypeError):
+                values = [row[i] for i in range(len(columns))]
+            lines.append(" | ".join(str(v) for v in values))
         if len(rows) > max_rows:
             lines.append(f"... ({len(rows) - max_rows} more rows)")
             

@@ -56,12 +56,18 @@ def _secret_key():
 # --------------------------------------------------------------------------
 
 def hash_password(password):
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    # bcrypt silently ignores bytes past 72; silently hashing an 80-char
+    # password would make later chars irrelevant — reject instead. Cap is
+    # ample: the docs ask for >=8, and this is a demo auth layer.
+    pw = (password or "").encode()
+    if len(pw) > 72:
+        raise ValueError("Password must be at most 72 bytes.")
+    return bcrypt.hashpw(pw, bcrypt.gensalt()).decode()
 
 
 def verify_password(password, pw_hash):
     try:
-        return bcrypt.checkpw(password.encode(), (pw_hash or "").encode())
+        return bcrypt.checkpw((password or "").encode()[:72], (pw_hash or "").encode())
     except Exception:
         return False
 
@@ -107,6 +113,11 @@ def create_user(email, password, role="user"):
     if role not in ("user", "admin"):
         raise ValueError("Role must be 'user' or 'admin'.")
 
+    # Hash BEFORE the INSERT: hash_password enforces the bcrypt 72-byte cap
+    # and must surface its own error — the old code computed the hash inside
+    # a blanket except that swallowed every failure as "already registered".
+    pw_hash = hash_password(password)
+
     user_id = _uuid()
     conn = get_connection()
     try:
@@ -114,7 +125,7 @@ def create_user(email, password, role="user"):
             conn.execute(
                 """INSERT INTO app_users (user_id, email, pw_hash, role, created_at)
                    VALUES (?, ?, ?, ?, ?)""",
-                (user_id, email, hash_password(password), role, _now()),
+                (user_id, email, pw_hash, role, _now()),
             )
         except Exception:
             # The only reachable constraint here (besides a uuid PK

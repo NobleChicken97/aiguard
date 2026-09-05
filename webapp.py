@@ -8,9 +8,9 @@ from pathlib import Path
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 import config
 from agent.llm_client import build_llm_client
@@ -60,7 +60,14 @@ _chat_llm_client_override = None
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=10000)
+
+    @field_validator("message")
+    @classmethod
+    def _not_blank(cls, v):
+        if not v.strip():
+            raise ValueError("message must not be blank")
+        return v
     # Legacy client field — IGNORED. Identity always comes from the session
     # cookie (Phase 1): trusting a client-supplied user_id would let any
     # caller read another user's sessions.
@@ -74,7 +81,7 @@ class ChatRequest(BaseModel):
 
 
 class ResumeRequest(BaseModel):
-    session_id: str
+    session_id: str = Field(min_length=1)
 
 
 def _pending_response(pending: PendingApproval):
@@ -108,6 +115,7 @@ async def lifespan(app: FastAPI):
     configure_ratelimit(
         chat_per_min=config.CHAT_RATE_PER_MIN,
         sse_max_per_ip=config.SSE_MAX_PER_IP,
+        auth_per_min=config.AUTH_RATE_PER_MIN,
     )
     logger.info(
         "aiguard started | chat_per_min=%s sse_max_per_ip=%s",
@@ -194,6 +202,26 @@ def health_detailed(request: Request):
     checks["llm"] = {"configured": _llm_configured()}
     status = "ok" if (checks["db"].get("ok") and checks["llm"].get("configured")) else "degraded"
     return JSONResponse({"status": status, "checks": checks})
+
+
+@app.get("/favicon.ico")
+def favicon():
+    """Tiny 1x1 placeholder so browsers stop 404ing on the icon path."""
+    import base64
+
+    png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA"
+        "AAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+    )
+    return Response(content=png, media_type="image/x-icon")
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots_txt():
+    """ crawlers stay out: login-gated demo with open registration and a
+    paid-per-call LLM backend — indexed pages would only attract abuse,
+    and no public content exists to index."""
+    return "User-agent: *\nDisallow: /\n"
 
 
 @app.get("/metrics")
@@ -392,6 +420,14 @@ def query_builder_run(req: QueryBuilderRequest, request: Request):
     to the logged-in user in the audit table.
     """
     user = require_user(request)
+    # Shares the per-user chat budget: one abuse budget across LLM-backed
+    # and direct-DB endpoints, rather than a separate bypassable allowance.
+    if not RL_STATE["chat_bucket"].allow(_rate_key(request, user)):
+        logger.info("builder rate-limited key=%s", _rate_key(request, user))
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Slow down and retry shortly.",
+        )
     try:
         result = run_builder_query(req, user_id=user["user_id"])
     except QueryBuilderError as e:
@@ -520,6 +556,11 @@ def login_submit(
     password: str = Form(""),
     csrf_token: str = Form(""),
 ):
+    if not RL_STATE["auth_bucket"].allow(_client_ip(request)):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many attempts. Slow down and retry shortly.",
+        )
     if not _csrf_ok(request, csrf_token):
         return _auth_page(request, "login.html",
                           error="Invalid or expired form. Please try again.",
@@ -550,6 +591,11 @@ def register_submit(
     password: str = Form(""),
     csrf_token: str = Form(""),
 ):
+    if not RL_STATE["auth_bucket"].allow(_client_ip(request)):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many attempts. Slow down and retry shortly.",
+        )
     if not _csrf_ok(request, csrf_token):
         return _auth_page(request, "register.html",
                           error="Invalid or expired form. Please try again.",
@@ -627,6 +673,11 @@ async def chat_api(req: ChatRequest, request: Request):
             orchestrator.load_session(req.session_id)
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
+        # load_session trusts the id it is given: verify the caller owns
+        # this session (or is admin), otherwise any user could hijack
+        # another user's conversation by guessing its session_id.
+        if user["role"] != "admin" and not owns_session(user["user_id"], req.session_id):
+            raise HTTPException(status_code=404, detail="Session not found.")
     else:
         orchestrator.start_session()
 
@@ -664,6 +715,12 @@ def approval_status(approval_id: str, request: Request):
 async def chat_resume(req: ResumeRequest, request: Request):
     """Continue a paused turn after its approval was decided."""
     user = require_user(request)
+    if not RL_STATE["chat_bucket"].allow(_rate_key(request, user)):
+        logger.info("resume rate-limited key=%s", _rate_key(request, user))
+        raise HTTPException(
+            status_code=429,
+            detail="Too many chat requests. Slow down and retry shortly.",
+        )
     if user["role"] != "admin" and not owns_session(user["user_id"], req.session_id):
         raise HTTPException(status_code=404, detail="Session not found.")
 

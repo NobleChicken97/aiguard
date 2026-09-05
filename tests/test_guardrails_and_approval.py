@@ -108,3 +108,21 @@ def test_pending_approval_queue_can_be_listed_and_resolved():
     resolved = resolve_approval(approval_id, "approved")
     assert resolved is True
     assert get_pending_approvals() == []
+
+
+def test_format_rows_handles_mapping_rows_like_postgres():
+    """Hermetic pin for the PG header-as-data bug (live prod, Sep 2026).
+
+    psycopg2 RealDictRow iterates KEYS while sqlite3.Row iterates VALUES,
+    so positional formatting rendered column names on PostgreSQL. Keyed
+    formatting is correct for both shapes (plus sqlite rows and tuples).
+    """
+    tool = SQLTool()
+    mapping_rows = [
+        {"id": 1, "name": "Alice Johnson"},
+        {"id": 8, "name": "Henry Wilson"},
+    ]
+    out = tool._format_rows(["id", "name"], mapping_rows)
+    assert "Alice Johnson" in out
+    assert "Henry Wilson" in out
+    assert out.splitlines()[2] == "1 | Alice Johnson"

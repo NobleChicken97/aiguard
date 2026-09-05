@@ -255,6 +255,12 @@ class Orchestrator:
             "call_id": pending.call_id,
             "reason": pending.risk_reason,
         })
+        # Release DB connections now: a pause skips _end_session, and every
+        # leaked handle made Windows reset_db's os.remove fail silently,
+        # corrupting suite isolation (caught in the Sep 2026 audit). resume()
+        # re-opens them via load_session.
+        self.long_term.close()
+        self.trace.close()
         return PendingApproval(
             approval_id=pending.approval_id,
             call_id=pending.call_id,

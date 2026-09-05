@@ -332,7 +332,7 @@ def test_rate_limit_is_per_user_not_global():
     webapp_module._chat_llm_client_override = FakeLLMClient(
         [FakeLLMClient.text_response("ok")] * 4
     )
-    configure_ratelimit(chat_per_min=1, sse_max_per_ip=3)
+    configure_ratelimit(chat_per_min=1, sse_max_per_ip=3, auth_per_min=0)
     try:
         client_a = _authed_client(uid_a)
         assert client_a.post("/api/chat", json={"message": "one"}).status_code == 200
@@ -341,7 +341,7 @@ def test_rate_limit_is_per_user_not_global():
         assert _authed_client(uid_b).post("/api/chat", json={"message": "hi"}).status_code == 200
     finally:
         webapp_module._chat_llm_client_override = None
-        configure_ratelimit(chat_per_min=30, sse_max_per_ip=3)
+        configure_ratelimit(chat_per_min=30, sse_max_per_ip=3, auth_per_min=0)
 
 
 def test_long_term_fact_reaches_next_session_prompt():
@@ -375,3 +375,86 @@ def test_login_required_on_json_apis():
         assert client.post("/api/query-builder/run", json={"table": "x"}).status_code == 401
         # /health stays open for load-balancer probes.
         assert client.get("/health").status_code == 200
+
+
+# --------------------------------------------------------------------------
+# Session-hijack regression (Sep 2026 live audit)
+# --------------------------------------------------------------------------
+
+def test_cannot_resume_another_users_session():
+    """`/api/chat` accepted a foreign session_id and silently took over the
+    conversation (load_session trusts the id). Now 404s for non-owners."""
+    uid_a = _make_user()
+    uid_b = _make_user()
+    webapp_module._chat_llm_client_override = FakeLLMClient(
+        [FakeLLMClient.text_response("A's answer.")]
+    )
+    sid_a = None
+    try:
+        with _authed_client(uid_a) as client_a:
+            resp = client_a.post("/api/chat", json={"message": "hello"})
+            assert resp.status_code == 200
+            sid_a = resp.json()["session_id"]
+    finally:
+        webapp_module._chat_llm_client_override = None
+
+    # B posts into A's session: must 404, not continue A's conversation.
+    webapp_module._chat_llm_client_override = FakeLLMClient(
+        [FakeLLMClient.text_response("B's answer.")]
+    )
+    try:
+        with _authed_client(uid_b) as client_b:
+            hijack = client_b.post(
+                "/api/chat", json={"message": "hello there", "session_id": sid_a}
+            )
+            assert hijack.status_code == 404
+            resume = client_b.post("/api/chat/resume", json={"session_id": sid_a})
+            assert resume.status_code in (404,)  # resume also owns-checked
+    finally:
+        webapp_module._chat_llm_client_override = None
+
+
+def test_cannot_resume_another_users_paused_turn():
+    """The resume endpoint's ownership check holds even for a real paused
+    turn (approval waiting)."""
+    uid_a = _make_user()
+    uid_b = _make_user()
+    webapp_module._chat_llm_client_override = FakeLLMClient(
+        [
+            FakeLLMClient.tool_use_response(
+                "sql_tool",
+                {"sql": "SELECT id FROM products; SELECT id FROM customers;"},
+                "toolu_hi1",
+            )
+        ],
+        route_decision="SQL",
+    )
+    try:
+        with _authed_client(uid_a) as client_a:
+            paused = client_a.post("/api/chat", json={"message": "bulk"})
+            assert paused.status_code == 202
+            sid_a = paused.json()["session_id"]
+        with _authed_client(uid_b) as client_b:
+            assert client_b.post(
+                "/api/chat/resume", json={"session_id": sid_a}
+            ).status_code == 404
+    finally:
+        webapp_module._chat_llm_client_override = None
+
+
+def test_empty_chat_message_rejected():
+    uid = _make_user()
+    with _authed_client(uid) as client:
+        assert client.post("/api/chat", json={"message": ""}).status_code == 422
+        assert client.post("/api/chat", json={"message": "   "}).status_code == 422
+
+
+def test_password_over_72_bytes_rejected():
+    from auth import create_user
+
+    try:
+        create_user("longpw@test.local", "x" * 80)
+    except ValueError as e:
+        assert "72" in str(e)
+    else:
+        raise AssertionError("80-char password should be rejected, not silently truncated")

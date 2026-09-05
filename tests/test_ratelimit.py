@@ -116,7 +116,7 @@ class TestChatEndpointRateLimit:
             with TestClient(app) as client:
                 client.cookies.set(SESSION_COOKIE, sign_session(uid))
                 # The limiter is keyed per user (Phase 1); reconfigure small.
-                configure_ratelimit(chat_per_min=2, sse_max_per_ip=0)
+                configure_ratelimit(chat_per_min=2, sse_max_per_ip=0, auth_per_min=0)
                 ok1 = client.post("/api/chat", json={"message": "hi"})
                 ok2 = client.post("/api/chat", json={"message": "hi"})
                 blocked = client.post("/api/chat", json={"message": "hi"})
@@ -127,7 +127,7 @@ class TestChatEndpointRateLimit:
             assert "Too many" in blocked.text
         finally:
             webapp_module._chat_llm_client_override = None
-            configure_ratelimit(chat_per_min=0, sse_max_per_ip=0)
+            configure_ratelimit(chat_per_min=0, sse_max_per_ip=0, auth_per_min=0)
 
     def test_rate_limit_is_per_user(self, monkeypatch):
         """One user's throttle never affects another user (Phase 1: the
@@ -144,7 +144,7 @@ class TestChatEndpointRateLimit:
         try:
             with TestClient(app) as client_a:
                 client_a.cookies.set(SESSION_COOKIE, sign_session(uid_a))
-                configure_ratelimit(chat_per_min=1, sse_max_per_ip=0)
+                configure_ratelimit(chat_per_min=1, sse_max_per_ip=0, auth_per_min=0)
                 first_a = client_a.post("/api/chat", json={"message": "hi"})
                 throttled_a = client_a.post("/api/chat", json={"message": "hi"})
             with TestClient(app) as client_b:
@@ -156,7 +156,38 @@ class TestChatEndpointRateLimit:
             assert first_b.status_code == 200
         finally:
             webapp_module._chat_llm_client_override = None
-            configure_ratelimit(chat_per_min=0, sse_max_per_ip=0)
+            configure_ratelimit(chat_per_min=0, sse_max_per_ip=0, auth_per_min=0)
+
+
+class TestAuthEndpointRateLimit:
+    def test_register_and_login_share_auth_bucket(self, monkeypatch):
+        """The AUTH_RATE_PER_MIN bucket (IP-keyed, no user yet) caps
+        account-creation and password-guess spam."""
+        import re as _re
+
+        configure_ratelimit(chat_per_min=0, sse_max_per_ip=0, auth_per_min=2)
+        try:
+            def _post(path, data):
+                # NO context manager: `with TestClient(app)` runs the
+                # lifespan which reconfigure_ratelimits back to config
+                # defaults, silently undoing this test's cap. Plain client +
+                # shared "testclient" IP keeps the auth bucket key stable.
+                client = TestClient(app)
+                page = client.get(path)
+                match = _re.search(r'name="csrf_token" value="([^"]+)"', page.text)
+                assert match, f"no form on {path}"
+                return client.post(path, data={**data, "csrf_token": match.group(1)})
+
+            ok1 = _post("/register", {"email": "rl-a@test.local", "password": "testpass123"})
+            ok2 = _post("/login", {"email": "rl-a@test.local", "password": "wrongpass1"})
+            blocked = _post("/register", {"email": "rl-b@test.local", "password": "testpass123"})
+
+            assert ok1.status_code in (200, 400, 401)
+            assert ok2.status_code in (200, 400, 401)
+            assert blocked.status_code == 429
+            assert "Too many" in blocked.text
+        finally:
+            configure_ratelimit(chat_per_min=0, sse_max_per_ip=0, auth_per_min=0)
 
 
 class TestSSEStreamLimit:
@@ -195,7 +226,7 @@ class TestSSEStreamLimit:
         uid = create_user("sse@test.local", "testpass123")
         with TestClient(app) as client:
             client.cookies.set(SESSION_COOKIE, sign_session(uid))
-            configure_ratelimit(chat_per_min=0, sse_max_per_ip=1)
+            configure_ratelimit(chat_per_min=0, sse_max_per_ip=1, auth_per_min=0)
             try:
                 # Hold the slot in-process before the request so the
                 # endpoint sees the cap is already full.
@@ -208,4 +239,4 @@ class TestSSEStreamLimit:
                 finally:
                     held.__exit__(None, None, None)
             finally:
-                configure_ratelimit(chat_per_min=0, sse_max_per_ip=0)
+                configure_ratelimit(chat_per_min=0, sse_max_per_ip=0, auth_per_min=0)

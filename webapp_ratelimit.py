@@ -1,10 +1,14 @@
 """In-memory rate limiting for the webapp.
 
-Two complementary guards:
+Three complementary guards:
 
 * ``TokenBucket``  - a per-user sliding-window-per-minute cap on POST ``/api/chat``
   calls (configurable via ``CHAT_RATE_PER_MIN``; IP fallback pre-auth).
   Disabled when 0.
+* ``TokenBucket``  - a second bucket for POST ``/login`` and
+  ``/register`` (``AUTH_RATE_PER_MIN``), keyed by IP since there is no
+  user yet. Without it, password guessing and account-creation spam are
+  unbounded. Disabled when 0.
 * ``ConcurrentStreamGuard`` - a per-user cap on simultaneously open SSE
   streams on ``/api/stream`` so a client cannot pin a worker per request
   (configurable via ``SSE_MAX_PER_IP``). Disabled when 0.
@@ -125,14 +129,18 @@ class _NullCtx:
 # Process-wide state. Imported by webapp.py.
 RL_STATE = {
     "chat_bucket": TokenBucket(0),       # configured at import-time below
+    "auth_bucket": TokenBucket(0),
     "stream_guard": ConcurrentStreamGuard(0),
 }
 
 
-def configure(chat_per_min, sse_max_per_ip):
+def configure(chat_per_min, sse_max_per_ip, auth_per_min):
     """Reset process-wide rate limiters to the current config values.
 
-    Called once on webapp startup. Idempotent.
+    Called once on webapp startup. Idempotent. All three are explicit —
+    there is deliberately no default that could silently re-enable a
+    limiter a test meant to disable.
     """
     RL_STATE["chat_bucket"] = TokenBucket(chat_per_min)
+    RL_STATE["auth_bucket"] = TokenBucket(auth_per_min)
     RL_STATE["stream_guard"] = ConcurrentStreamGuard(sse_max_per_ip)

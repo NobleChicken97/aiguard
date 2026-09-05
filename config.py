@@ -102,3 +102,9 @@ SQL_QUERY_CACHE_SIZE = int(os.getenv("SQL_QUERY_CACHE_SIZE", "128"))
 # streams per client.
 CHAT_RATE_PER_MIN = int(os.getenv("CHAT_RATE_PER_MIN", "30"))
 SSE_MAX_PER_IP = int(os.getenv("SSE_MAX_PER_IP", "3"))
+
+# Per-IP cap on POST /login + POST /register (0 disables). No user exists
+# yet on these paths, so IP is the only available key. Default matches the
+# chat budget; the full test suite stays under it (auth endpoint tests use
+# direct DB helpers except the dedicated throttle tests).
+AUTH_RATE_PER_MIN = int(os.getenv("AUTH_RATE_PER_MIN", "30"))
