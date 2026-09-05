@@ -13,7 +13,10 @@ echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
 
 # Docker + compose.
 dnf update -y
-dnf install -y docker git curl
+# Docker + compose. NOTE: do NOT add full `curl` here — it conflicts with
+# preinstalled curl-minimal on AL2023 (verified live); curl-minimal's
+# binary is sufficient for the fallback download below.
+dnf install -y docker git
 systemctl enable --now docker
 if ! dnf install -y docker-compose-plugin; then
   mkdir -p /usr/local/lib/docker/cli-plugins
