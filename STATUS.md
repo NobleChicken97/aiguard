@@ -180,6 +180,8 @@ Still human: external adversarial-5 prompts, demo video recording, optional `LLM
 
 Your first manual gate run caught a real bug: all 4 scenarios failed with `OperationalError: no such table: app_sessions` — `main()` never created its own schema (local dev DBs masked it). Fixed: the harness now calls `initialize_db()` + `seed_demo_data()` before running (seed makes the read-only check deterministic). Pinned by `test_main_initializes_fresh_database`, which runs `main()` against a nonexistent DB file and asserts exit 0 plus seeded tables. Re-run the gate from Actions when ready.
 
+**Update 2026-09-05:** re-run green — manual `workflow_dispatch` fully success incl. `live-smoke` 4/4 with the real key. Ticket 02 CLOSED (all checkboxes).
+
 Still human: external adversarial-5 prompts, demo video recording.
 
 ## Queued follow-ups closed (2026-09-04)

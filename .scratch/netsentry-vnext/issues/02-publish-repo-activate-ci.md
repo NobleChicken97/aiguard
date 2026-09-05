@@ -4,10 +4,10 @@
 
 **Blocked by:** None (can start immediately; needs the owner to create the repo / provide the remote URL and credentials — that part is not agent-doable).
 
-**Status:** done (all required items; only the optional secret remains)
+**Status:** done (all items, incl. the live-smoke gate — verified 2026-09-05)
 
 - [x] Remote added, history pushed (`origin` = NobleChicken97/agentic_guardrails, `main` in sync)
 - [x] CI workflow run is green on the pushed commit (all five gates + release-gate — verified in Actions, incl. the 8 PostgreSQL-gated tests executing)
 - [x] PostgreSQL-gated tests execute (not skip) in the CI run
 - [x] README badge/links updated to the public repo
-- [ ] Optional: set the `LLM_API_KEY` repo secret (free Groq key) to enable the manual live-smoke gate
+- [x] `LLM_API_KEY` repo secret set; manual `workflow_dispatch` run green incl. `live-smoke` 4/4 (first attempt caught a real harness bug — missing init/seed — fixed, pinned, re-run green)
