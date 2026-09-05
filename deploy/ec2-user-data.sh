@@ -13,7 +13,7 @@ echo '/swapfile swap swap defaults 0 0' >> /etc/fstab
 
 # Docker + compose.
 dnf update -y
-dnf install -y docker git
+dnf install -y docker git curl
 systemctl enable --now docker
 if ! dnf install -y docker-compose-plugin; then
   mkdir -p /usr/local/lib/docker/cli-plugins
