@@ -259,7 +259,7 @@ The project includes the following significant features and hardening steps:
 
 ## Remaining items and honest residuals
 Resolved since v1.6.7 (the old list below contradicted the changelog — each item verified against code before closing):
-- builder aggregates/group-by/FK joins: shipped in v1.6.3 and tested. Precise residuals: multi-hop joins, and joins×aggregates (explicitly refused by the builder).
+- builder aggregates/group-by/FK joins: shipped in v1.6.3 and tested. Precise residuals: multi-hop joins and joins×aggregates are an accepted limitation (see `design.md` known limitations), not roadmap.
 - data policies beyond the allow-list: shipped (column deny policy, Phase 2).
 - RBAC and user identity: shipped (HMAC auth, `user`/`admin` roles, 20-test isolation suite, Phase 1).
 - Redis service in CI: shipped (service + gated suite, Phase 3, ticket 03 closed).

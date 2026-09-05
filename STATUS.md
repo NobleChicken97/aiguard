@@ -184,6 +184,27 @@ Your first manual gate run caught a real bug: all 4 scenarios failed with `Opera
 
 Still human: external adversarial-5 prompts, demo video recording.
 
+## Test-count tripwire (2026-09-05)
+
+The suite total wobbled once (301 vs 302 with no code change). Hunted, not
+explained away: failure cache empty, no xfail markers anywhere, all skips
+env-deterministic (PG/Redis), and 4 consecutive full runs since agree at
+302/10 (312 collected). Most plausible cause is a truncated-output misread
+on my part — owned as such. Rule going forward: if any future run deviates
+from 302 passed / 10 skipped, treat it as a flakiness signal and hunt
+(shared process-global suspects, in order: `webapp_metrics` counters,
+`RL_STATE` buckets, Redis verdict cache, TestClient lifespan config,
+FakeLLMClient shared override) — do not re-explain, do not tune.
+
+## Builder scope: decided (2026-09-05)
+
+Multi-hop joins and joins×aggregates in the visual builder are an
+accepted-forever limitation, not roadmap (decision, with rationale, in
+`design.md` known limitations). The stale "remaining/future" mentions in
+`prod.md`, `progress.md`, and `docs/report.md` were corrected in the same
+pass — the status-note-lag pattern ends here: any future scope change to
+the builder must update all four files or say why not.
+
 ## Queued follow-ups closed (2026-09-04)
 
 1. **Login/register CSRF**: auth forms now use the same double-submit cookie pattern as approvals (fresh token per GET, 403 + retryable error page on mismatch). Logout stays token-less deliberately (logout-CSRF impact is nuisance-only). 20 authz tests (incl. a 403-without-token test); load script submits like the browser.

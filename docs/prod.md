@@ -23,7 +23,7 @@ These are valuable, but not necessary for the core safety demo:
 - More advanced table-level policy controls beyond static allow-lists
 - Temporary approval escalation flows for multi-user environments
 - Redis-backed session caching and distributed memory in production-like deployments
-- Visual query builder enhancements such as joins, grouping, and aggregate query support
+- Visual query builder: single-table, aggregates/group-by, and single declared-FK hops are shipped; multi-hop joins and joins×aggregates are an accepted limitation (see `design.md` known limitations), not stretch work
 - Postgres migration tooling and production data sync workflow improvements
 
 ## Non-goals

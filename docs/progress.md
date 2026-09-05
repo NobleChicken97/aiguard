@@ -102,9 +102,9 @@
    - Read-only by design: single SELECT only, no session/trace/tool-call writes, so builder runs never pollute agent metrics.
    - API: `GET /api/query-builder/schema`, `POST /api/query-builder/run`. Covered by 9 dedicated tests in `tests/test_query_builder.py` and verified against real uvicorn.
 
-## Remaining
-1. Optional builder extensions: FK-based joins, GROUP BY/aggregates, persisted audit rows for builder runs.
-2. Optional: Redis service in CI; publish repo to GitHub to activate the workflow.
+## Remaining (resolved — kept as archaeological record; do not re-add)
+1. ~~Optional builder extensions: FK-based joins, GROUP BY/aggregates, persisted audit rows~~ — all shipped (v1.6.2–v1.6.3). Residual builder scope (multi-hop joins, joins×aggregates) is an accepted limitation per `design.md`, not roadmap.
+2. ~~Redis service in CI; publish repo to GitHub~~ — both shipped (tickets 02/03).
 
 ## v1.6.0 — Hardening & Quality (Sep 2026)
 **Status:** ✅ Completed
