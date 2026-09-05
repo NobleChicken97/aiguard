@@ -46,6 +46,84 @@ serves the Jinja UI itself.
 
 ---
 
+## ☁️ AWS App Runner + RDS PostgreSQL (RECOMMENDED setup guide)
+
+No local Docker needed: App Runner builds straight from the GitHub repo
+(source deploy), and the migration script runs from your machine. Console
+values below are exact — no `apprunner.yaml` file required (everything is
+set in the console, which is also where secrets belong).
+
+### Part A — RDS PostgreSQL (~10 min, console)
+
+1. RDS → **Create database** → Engine: **PostgreSQL 16.x** → Templates:
+   **Free tier** (or `db.t4g.micro`, 20 GB gp3 — covered by credits either way).
+2. DB instance identifier: `agentic-postgres`. Master username: `admin`
+   (dedicated app user landing later; master is fine for initial setup).
+   Master password: generate a long one, **save it in a password manager**.
+3. **Public access: Yes** (setup simplicity — see hardening note below).
+   Create a **new security group**; after creation, edit its inbound rule:
+   PostgreSQL/5432 source = **your IP only** (console offers "My IP").
+4. Additional configuration → Initial database name: `agentic_db`.
+   Create. Wait for Status **Available** (~5–10 min).
+5. Copy the **Endpoint** (looks like
+   `agentic-postgres.xxxxx.us-east-1.rds.amazonaws.com`). Your URL is:
+   `postgresql://admin:YOUR-PASSWORD@ENDPOINT:5432/agentic_db`
+
+> Hardening note (demo-acceptable as configured): public RDS + strong
+> password + IP-scoped security group + psycopg2 SSL-by-default is reasonable
+> for a demo. For anything real: private RDS + App Runner VPC connector +
+> Secrets Manager rotation (see Secrets Management above).
+
+### Part B — Migrate + seed (~5 min, your terminal)
+
+```powershell
+$env:DATABASE_URL = "postgresql://admin:YOUR-PASSWORD@ENDPOINT:5432/agentic_db"
+python -m db.migrate_sqlite_to_pg --source data/guardrails.db
+```
+
+Expect per-table `source == target` counts ending in `Verification passed`.
+This copies schema + demo rows + app rows (13 tables, FK-safe order). The
+`--truncate` flag is only for clean re-cutovers.
+
+### Part C — App Runner service (~10 min, console)
+
+1. App Runner → **Create service** → Source: **Source code repository** →
+   connect GitHub (`NobleChicken97/agentic_guardrails`, branch `main`).
+   Deployment trigger: **Automatic** (every push redeploys).
+2. Build settings → Runtime: **Python 3.11** → Build command:
+   `pip install -r requirements.txt` → Start command:
+   `uvicorn webapp:app --host 0.0.0.0 --port 8000` → Port: **8000**.
+3. Health check → Path: **`/health`** (keep the rest default).
+4. Instance: **0.25 vCPU / 0.5 GB** (demo-sufficient, credit-cheap).
+5. Environment variables (paste; mark `LLM_API_KEY` as **Secret**):
+
+   | Key | Value |
+   |---|---|
+   | `DATABASE_URL` | the `postgresql://…` URL from Part A |
+   | `LLM_PROVIDER` | `groq` |
+   | `LLM_API_KEY` | your Groq key (secret) |
+   | `SESSION_SECRET` | fresh output of `python -c "import secrets;print(secrets.token_hex(32))"` |
+   | `SESSION_COST_BUDGET_USD` | `0.50` |
+   | `LOG_LEVEL` / `LOG_FORMAT` | `INFO` / `json` (CloudWatch-friendly) |
+
+6. Create + wait for Status **Running** (~5 min first build — watch the
+   build log; `pip install` pulls spaCy + the NER model wheel).
+
+### Part D — Verify live (~10 min, browser)
+
+1. Open the App Runner URL → `/health` returns
+   `{"status":"ok","db_connected":true,…}` (**against RDS**, not SQLite).
+2. Register two users (normal + incognito), run the `docs/DEMO.md` shots:
+   normal query → DROP refusal → approval flow → PII masking → Bob 404s on
+   Alice's trace.
+3. Persistence proof: trigger a redeploy (push an empty commit or hit
+   **Deploy**), then confirm sessions/traces/memory survived — that is the
+   architecture working outside local Docker.
+4. Record the URL + date + smoke results; send them back to be filed as
+   the v1.7.0 evidence entry (same style as every other entry).
+
+---
+
 ## 🚀 Local Development
 
 ### Prerequisites
