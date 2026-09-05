@@ -550,16 +550,17 @@ Naming these ourselves — maturity, not weakness. Each links to its proof or pl
 |---|---|---|
 | Destructive SQL | ✅ Solid | 100% block rate, adversarial suite + red-team battery |
 | Column policy | ✅ Solid | Enforced + tested; default policy empty (demo schema has no sensitive column) |
-| Auth / isolation | ✅ Solid | 19-test authz suite; login required everywhere |
+| Auth / isolation | ✅ Solid | 20-test authz suite; login required everywhere |
 | Approval flow | ✅ Solid | Pause/resume, 30/30 concurrent in 1.9s wall |
+| Visual builder scope | ✅ Accepted limitation | Single-hop fallback by design; multi-hop answered by guardrailed agent SQL (pinned by test) |
 | Router | ✅ Measured | 97.5% live (39/40), one analyzed miss, tracked via `router_eval.py` |
 | Observability | ✅ Solid | `/metrics`, JSON logs, `/health/detailed`, secrets docs |
 | Web search | ⚠️ Intentional stub | `MockWebSearchTool` everywhere-labeled; live API needs a key (`Tavily`/`Brave` seam documented) |
 | NER masking | ⚠️ Flagged off | Measured (PERSON 10/10, GPE 8/8, FP 2/10 products); enable via `PII_NER_ENABLED=1` for free-text data |
 | External adversarial-5 | 🔲 Human item | Needs an independent author; see `STATUS.md` Phase 2 |
 | Demo video | 🔲 Human item | Script in `docs/DEMO.md`; 2–3 min walkthrough ready to record |
-| Login/register CSRF | 🔲 Queued | Marginal risk, tracked in `STATUS.md` |
-| Resume-row janitor | 🔲 Queued | Orphaned rows if a user never resumes; tracked in `STATUS.md` |
+| Login/register CSRF | ✅ Shipped | Double-submit tokens on auth forms; logout intentionally token-less |
+| Resume-row janitor | ✅ Shipped | Opportunistic purge of decided rows older than 24h; undecided never touched |
 | Full RBAC / OIDC | 🔲 Future | `user`/`admin` roles exist; OIDC swap documented as next step |
 
 ---

@@ -188,10 +188,12 @@ Still human: external adversarial-5 prompts, demo video recording.
 
 The suite total wobbled once (301 vs 302 with no code change). Hunted, not
 explained away: failure cache empty, no xfail markers anywhere, all skips
-env-deterministic (PG/Redis), and 4 consecutive full runs since agree at
-302/10 (312 collected). Most plausible cause is a truncated-output misread
+env-deterministic (PG/Redis), and consecutive full runs agreed at
+302/10 (312 collected) before one legitimate addition (the multi-hop
+regression test below moved the baseline to 303/10, 313 collected).
+Most plausible cause is a truncated-output misread
 on my part — owned as such. Rule going forward: if any future run deviates
-from 302 passed / 10 skipped, treat it as a flakiness signal and hunt
+from 303 passed / 10 skipped, treat it as a flakiness signal and hunt
 (shared process-global suspects, in order: `webapp_metrics` counters,
 `RL_STATE` buckets, Redis verdict cache, TestClient lifespan config,
 FakeLLMClient shared override) — do not re-explain, do not tune.
@@ -200,7 +202,9 @@ FakeLLMClient shared override) — do not re-explain, do not tune.
 
 Multi-hop joins and joins×aggregates in the visual builder are an
 accepted-forever limitation, not roadmap (decision, with rationale, in
-`design.md` known limitations). The stale "remaining/future" mentions in
+`design.md` known limitations). The underlying premise — guardrailed agent
+SQL covers multi-hop — is now proven by test, not trusted:
+`test_agent_answers_multi_hop_join_end_to_end` (2026-09-05). The stale "remaining/future" mentions in
 `prod.md`, `progress.md`, and `docs/report.md` were corrected in the same
 pass — the status-note-lag pattern ends here: any future scope change to
 the builder must update all four files or say why not.

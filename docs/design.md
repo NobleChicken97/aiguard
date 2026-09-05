@@ -182,7 +182,7 @@ The ticket's other alternative — collapsing the supervisor into a single worke
 
 ## Known limitations and deferred hardening
 - The policy engine is intentionally conservative and schema-specific; it is not a generic SQL security product.
-- The visual query builder is deliberately single-hop: one table, optional aggregates, or one declared-FK join — never multi-hop joins or joins×aggregates (explicitly refused). This is an accepted limitation, not a roadmap gap: the builder is a fallback for when the agent struggles, and the guardrailed agent SQL path already answers multi-hop questions. Revisit only on a real user request citing an unanswerable question (none to date).
+- The visual query builder is deliberately single-hop: one table, optional aggregates, or one declared-FK join — never multi-hop joins or joins×aggregates (explicitly refused). This is an accepted limitation, not a roadmap gap: the builder is a fallback for when the agent struggles, and the guardrailed agent SQL path already answers multi-hop questions. Proven, not assumed: `test_agent_answers_multi_hop_join_end_to_end` drives a two-table JOIN end-to-end (allow → execute → answer, verified in the trace). Revisit only on a real user request citing an unanswerable question (none to date).
 - The project does not attempt deep semantic validation of every business rule; it focuses on execution boundaries and explicit approvals.
 - The approval system is simple and useful for demos, but it would need stronger identity, audit, and escalation flows for real multi-user deployment.
 - The architecture is local-first and deliberately lightweight; it is not yet designed for large multi-tenant workloads or high concurrency.

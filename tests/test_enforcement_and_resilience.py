@@ -339,5 +339,36 @@ class TestErrorScenarioCategories:
         assert len(result) > 0
 
 
+def test_agent_answers_multi_hop_join_end_to_end():
+    """Premise pin for the accepted builder limitation (design.md): the
+    guardrailed *agent* SQL path — not the visual builder — answers
+    multi-hop questions. Two-table JOIN here; the mechanism (allow-listed
+    tables + successful execution) is hop-count independent, and the
+    red-team suite already pins join allow-listing at the guardrail."""
+    fake_llm = FakeLLMClient([
+        FakeLLMClient.tool_use_response(
+            "sql_tool",
+            {"sql": "SELECT o.total, c.name FROM orders o JOIN customers c ON o.customer_id = c.id WHERE o.id = 1"},
+            "toolu_join_1",
+        ),
+        FakeLLMClient.text_response("Order 1 totals 1329.98 for Alice Johnson."),
+    ], route_decision="SQL")
+
+    orchestrator = Orchestrator(
+        llm_client=fake_llm,
+        approval_handler=AutoApproveHandler(),
+        user_id="join_user",
+    )
+    result = orchestrator.run("What is the total of order 1 and who placed it?")
+    assert result == "Order 1 totals 1329.98 for Alice Johnson."
+
+    # The tool really executed (not a model hallucination):
+    tool_results = [
+        e for e in orchestrator.get_trace() if e["event_type"] == "tool_result"
+    ]
+    assert tool_results and tool_results[0]["data"]["status"] == "success"
+    assert "Alice Johnson" in tool_results[0]["data"]["output"]
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -110,7 +110,7 @@ The project test suite covers all safety, resilience, and integration paths:
 | Supervisor structured routing (Phase 4) | 8 tests | 100% |
 | Explicit mock-search contract (Phase 5) | 6 tests | 100% |
 | Observability + Redis STM, 2 Redis-gated (Phase 3/6) | 9 tests | 100% |
-| **Total** | **312 collected** | **302 passed, 10 skipped (8 PG + 2 Redis)** |
+| **Total** | **313 collected** | **303 passed, 10 skipped (8 PG + 2 Redis)** |
 
 ### Adversarial guardrail effectiveness
 
@@ -144,7 +144,7 @@ No live deployment exists yet: everything above is local/CI validation. The depl
 
 ### Version history
 
-- **Post-v1.6.7 (Sep 2026) — Phases 0–7:** ground-truth audit (90% per-module coverage); safe cost default + fail-closed token semantics; HMAC auth with 7-table isolation + memory-prompt fix; column deny policy + INSERT volume gate + measured (flagged-off) NER; pause/resume approvals + Redis in CI; confidence-gated router (97.5% on a 40-case live eval); explicit mock search with labels everywhere; observability (`/metrics`, JSON logs, deep health, secrets docs). Suite: 302 passed / 10 skipped (312 collected). Detail: `STATUS.md` and the root `report.md` (harsh-critic edition).
+- **Post-v1.6.7 (Sep 2026) — Phases 0–7:** ground-truth audit (90% per-module coverage); safe cost default + fail-closed token semantics; HMAC auth with 7-table isolation + memory-prompt fix; column deny policy + INSERT volume gate + measured (flagged-off) NER; pause/resume approvals + Redis in CI; confidence-gated router (97.5% on a 40-case live eval); explicit mock search with labels everywhere; observability (`/metrics`, JSON logs, deep health, secrets docs). Suite: 303 passed / 10 skipped (313 collected). Detail: `STATUS.md` and the root `report.md` (harsh-critic edition).
 - **v1.6.7** (Sep 2026) — Production CI pipeline + deployment guidance:
   - CI rewritten as five project-specific gates (static bug-class lint,
     SQLite suite + real uvicorn `/health` boot probe, postgres:16 suite,
