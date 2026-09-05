@@ -229,6 +229,17 @@ def main(argv=None):
     def client_factory(_scenario):
         return client
 
+    # Own the database: CI runners (and fresh checkouts) have no schema yet,
+    # and without these two lines every scenario fails with
+    # "OperationalError: no such table" before the LLM is even called.
+    # Seeding also makes the read-only scenario deterministic.
+    from db.database import initialize_db
+    from db.seed import seed_demo_data
+
+    initialize_db()
+    seed_demo_data()
+    print("Database initialized and seeded for the smoke run.")
+
     results = run_smoke_suite(client_factory)
     _print_report(results, provider, model)
     return overall_exit_code(results)

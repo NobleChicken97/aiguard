@@ -176,6 +176,12 @@ Decision (user): explicit mock now; live integration needs a provider key nobody
 
 Still human: external adversarial-5 prompts, demo video recording, optional `LLM_API_KEY` repo secret (enables manual live-smoke gate).
 
+## Live-smoke harness fix (2026-09-05)
+
+Your first manual gate run caught a real bug: all 4 scenarios failed with `OperationalError: no such table: app_sessions` — `main()` never created its own schema (local dev DBs masked it). Fixed: the harness now calls `initialize_db()` + `seed_demo_data()` before running (seed makes the read-only check deterministic). Pinned by `test_main_initializes_fresh_database`, which runs `main()` against a nonexistent DB file and asserts exit 0 plus seeded tables. Re-run the gate from Actions when ready.
+
+Still human: external adversarial-5 prompts, demo video recording.
+
 ## Queued follow-ups closed (2026-09-04)
 
 1. **Login/register CSRF**: auth forms now use the same double-submit cookie pattern as approvals (fresh token per GET, 403 + retryable error page on mismatch). Logout stays token-less deliberately (logout-CSRF impact is nuisance-only). 20 authz tests (incl. a 403-without-token test); load script submits like the browser.

@@ -209,3 +209,41 @@ class TestMainEntryPoint:
         assert exit_code == 0
         out = capsys.readouterr().out
         assert "4/4 scenarios passed" in out
+
+    def test_main_initializes_fresh_database(self, monkeypatch, tmp_path):
+        """Regression: on a machine with no schema yet (fresh CI runner),
+        main() must create and seed tables itself instead of failing every
+        scenario with 'OperationalError: no such table'."""
+        import config
+        from db.database import get_connection
+
+        fresh_db = tmp_path / "fresh-smoke.db"
+        assert not fresh_db.exists()
+        monkeypatch.setattr(config, "DB_PATH", str(fresh_db))
+        client = RoutingFakeLLMClient(
+            [
+                FakeLLMClient.text_response("Hello!"),
+                FakeLLMClient.tool_use_response(
+                    "sql_tool", {"sql": "SELECT COUNT(*) AS n FROM customers"}, "t1"
+                ),
+                FakeLLMClient.text_response("There are 10 customers."),
+                FakeLLMClient.tool_use_response(
+                    "sql_tool", {"sql": "DROP TABLE customers"}, "t2"
+                ),
+                FakeLLMClient.text_response("Blocked, thankfully."),
+                FakeLLMClient.text_response("Python was created by Guido van Rossum."),
+            ],
+            route_fn=_research_router,
+        )
+        monkeypatch.setattr(live_api_smoke, "build_llm_client", lambda: client)
+
+        assert live_api_smoke.main() == 0
+
+        conn = get_connection()
+        try:
+            sessions = conn.execute("SELECT COUNT(*) AS cnt FROM app_sessions").fetchone()["cnt"]
+            assert sessions >= 4  # one session per scenario
+            customers = conn.execute("SELECT COUNT(*) AS cnt FROM customers").fetchone()["cnt"]
+            assert customers == 10  # seeded by the harness itself
+        finally:
+            conn.close()
