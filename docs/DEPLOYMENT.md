@@ -46,6 +46,30 @@ serves the Jinja UI itself.
 
 ---
 
+## ☁️ EC2 Free-Tier Single Box (EXECUTED plan)
+
+$0 path when App Runner is unavailable (e.g. an account without an App
+Runner subscription): one `t3.micro` (Amazon Linux 2023, 30 GB gp3 — both
+free-tier) running the existing `docker-compose.yml` plus
+`docker-compose.prod.yml` (Caddy TLS + restart policies). Postgres + Redis
+run in compose; no RDS involved.
+
+- Entry files: `Caddyfile`, `docker-compose.prod.yml`,
+  `deploy/ec2-user-data.sh` (placeholders `__DOMAIN__`,
+  `__LLM_API_KEY__`, `__SESSION_SECRET__` filled at launch; the rendered
+  script with secrets is never committed).
+- Access: SSM Session Manager only (no SSH keys, no port 22). SG opens
+  80/443 to the world; Elastic IP stays attached (free while attached).
+- DNS: Namecheap A record for the hostname → Elastic IP; Caddy issues
+  certs automatically once it resolves (first boot retries on its own).
+- Secrets live only in the box `.env` (root-readable, never in the repo);
+  rotate provider keys after pasting them through chat.
+- After boot: `docker compose exec -T app python -m db.seed` seeds demo
+  rows (schema auto-creates); verify `/health`, then the `docs/DEMO.md`
+  walkthrough on the domain.
+
+---
+
 ## ☁️ AWS App Runner + RDS PostgreSQL (RECOMMENDED setup guide)
 
 No local Docker needed: App Runner builds straight from the GitHub repo

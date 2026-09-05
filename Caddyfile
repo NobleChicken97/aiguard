@@ -1,0 +1,7 @@
+# Production TLS entrypoint (used only with docker-compose.prod.yml).
+# {$DOMAIN} comes from the environment (your public hostname, e.g.
+# demo.example.com). Caddy provisions and renews Let's Encrypt certs
+# automatically; all HTTP is redirected to HTTPS.
+{$DOMAIN} {
+	reverse_proxy app:8000
+}
