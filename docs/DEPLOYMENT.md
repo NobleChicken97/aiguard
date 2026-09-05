@@ -53,6 +53,23 @@ No local Docker needed: App Runner builds straight from the GitHub repo
 values below are exact — no `apprunner.yaml` file required (everything is
 set in the console, which is also where secrets belong).
 
+### Part 0 — Two console prerequisites (≈3 min, you — the CLI cannot do these)
+
+Our automation verified (Sep 2026) that this account's CLI key gets
+`SubscriptionRequiredException` on every App Runner call until the console
+onboarding completes, and GitHub source deploys additionally need an OAuth
+handshake. Both happen in the browser, once ever:
+
+1. Open the **App Runner console** (same region you'll deploy in,
+   e.g. `ap-south-1`). If it shows a first-run / onboarding / "get started"
+   prompt, accept it. (This clears the subscription error; the
+   `AWSServiceRoleForAppRunner` service-linked role already exists.)
+2. When you reach Part C below, App Runner will offer **Add new GitHub
+   connection** inline → **Install AWS Connector for GitHub** → authorize
+   `NobleChicken97` (all repos, or select `agentic_guardrails`) → you land
+   back in the console with the connection ready. No CLI equivalent exists
+   for this handshake.
+
 ### Part A — RDS PostgreSQL (~10 min, console)
 
 1. RDS → **Create database** → Engine: **PostgreSQL 16.x** → Templates:
