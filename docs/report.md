@@ -10,7 +10,9 @@ The app can:
 - route user tasks to a SQL worker or research worker
 - execute safe database reads through a guardrailed SQL tool
 - block unsafe or destructive SQL before it reaches the database
-- require explicit approval for high-risk actions
+- require explicit approval for high-risk actions (async pause/resume — the turn returns 202 immediately, no worker thread held, and continues when decided)
+- isolate users behind login: per-user session, trace, approval, memory, and builder-run scoping (cross-user reads 404)
+- route with claimed confidence, asking for clarification instead of guessing
 - persist sessions, tool calls, approvals, memory facts, and trace events
 - serve a web dashboard and approval UI via FastAPI
 - operate against SQLite by default with optional PostgreSQL compatibility
@@ -20,7 +22,7 @@ The app can:
 ### Orchestrator and workers
 The main orchestration is centered in the Python package under `agent/`.
 - `agent/orchestrator.py` manages the session lifecycle and tool execution flow
-- `agent/supervisor.py` decides whether a task should be routed to SQL or research work
+- `agent/supervisor.py` decides whether a task should be routed to SQL or research work (structured JSON with claimed confidence; below-threshold or unparseable replies ask the user to clarify instead of guessing; 97.5% on a 40-case live eval)
 - `agent/workers.py` executes the worker-specific tool loops with retry and budget-aware handling
 
 This is intentionally lightweight and explicit rather than built on a large external framework, which keeps the behavior easy to inspect, test, and explain.
@@ -40,15 +42,17 @@ The key safety mechanism is in `guardrails/sql_guardrail.py`.
 - It rejects destructive actions such as `DROP`, `ALTER`, `TRUNCATE`, and `CREATE`
 - It blocks `DELETE` and `UPDATE` statements that do not include a `WHERE` clause
 - It enforces an allow-list of legitimate business tables
+- It enforces an (empty-by-default) column deny policy — including via `SELECT *` expansion — and gates bulk or unknowable-size INSERTs like the UPDATE/DELETE row-count rule
 - It evaluates generated SQL before execution, which acts as an execution gate
 
 A second layer in `guardrails/pii_guardrail.py` masks email and phone values in query results before they are returned to the user.
 
 ### Approval model
 `approval/gate.py` implements the approval flow.
-- risky operations can be paused and sent to a user for decision
-- CLI, auto-approve, auto-deny, and web approval modes are supported
+- risky operations pause the turn and release the worker thread; the frontend short-polls and resumes when decided
+- CLI, auto-approve, auto-deny, and async (non-blocking) handlers are supported — the old 300s blocking web poll loop was retired
 - requests and the related tool calls are stored in the app schema for visibility and audit purposes
+- every stateful endpoint requires login (HMAC session cookies); approvals and sessions resolve cross-user reads to 404
 
 ### Tools
 The tool registry is intentionally small and constrained:
@@ -64,6 +68,7 @@ The tool registry is intentionally small and constrained:
 - `/query-builder` for a human-assisted query assembly flow
 - approval queue pages for high-risk actions
 - trace replay and metrics APIs
+- `/metrics` Prometheus exposition, `LOG_FORMAT=json` logging, `/health/detailed` readiness shape, CSRF on auth + approval forms
 
 The dashboard exposes live session stats and recent guardrail verdicts, and the app provides structured event logging for analysis.
 
@@ -97,7 +102,15 @@ The project test suite covers all safety, resilience, and integration paths:
 | Builder aggregates, FK joins, session lifecycle (v1.6.3) | 22 tests | 100% |
 | OpenAI-compatible provider layer (v1.6.4) | 20 tests | 100% |
 | Live-API smoke harness (v1.6.5) | 9 tests | 100% |
-| **Total** | **204 tests** | **100% (196 without PG)** |
+| Auth + multi-tenancy isolation (Phase 1) | 20 tests | 100% |
+| Column policy + INSERT gate (Phase 2) | 20 tests | 100% |
+| Column-bypass red team, self-written (Phase 2) | 21 tests | 100% blocked |
+| Approval pause/resume (Phase 3) | 11 tests | 100% |
+| Router eval metric, hermetic (Phase 4) | 6 tests | 100% |
+| Supervisor structured routing (Phase 4) | 8 tests | 100% |
+| Explicit mock-search contract (Phase 5) | 6 tests | 100% |
+| Observability + Redis STM, 2 Redis-gated (Phase 3/6) | 9 tests | 100% |
+| **Total** | **312 collected** | **302 passed, 10 skipped (8 PG + 2 Redis)** |
 
 ### Adversarial guardrail effectiveness
 
@@ -114,18 +127,24 @@ All 22 destructive SQL attempts across 17 adversarial prompts are blocked before
 | Multi-statement & obfuscated | 3 | 3 | 100% |
 | **Total** | **27** | **27** | **100%** |
 
+A second, self-written red-team battery (`tests/test_redteam_phase2.py`, 20 column-bypass shapes: case, quoting, aliases, nesting, set ops, joins, write paths) also blocks 100% — with logged provenance: same author as the implementation, so it proves mechanism coverage, not independence. External prompts from an independent author stay open (see Remaining items).
+
 ### Deployment readiness
 
 | Platform | Status |
 |----------|--------|
-| Docker Compose | ✅ Verified |
-| Render / Railway free tier | ✅ Documented |
-| AWS Elastic Beanstalk | ✅ Documented |
-| Google Cloud GKE | ✅ Documented |
-| Digital Ocean App Platform | ✅ Documented |
+| AWS App Runner + RDS PostgreSQL | ✅ Recommended (Sep 2026) — not yet executed |
+| Docker Compose | ✅ Verified (local) |
+| Render / Railway free tier | ✅ Documented (superseded by the App Runner recommendation) |
+| AWS Elastic Beanstalk | ✅ Documented (superseded) |
+| Google Cloud GKE | ✅ Documented (superseded) |
+| Digital Ocean App Platform | ✅ Documented (superseded) |
+
+No live deployment exists yet: everything above is local/CI validation. The deployment guide (`docs/DEPLOYMENT.md`, including a secrets-management section) is written; the App Runner + RDS standup is a human action item.
 
 ### Version history
 
+- **Post-v1.6.7 (Sep 2026) — Phases 0–7:** ground-truth audit (90% per-module coverage); safe cost default + fail-closed token semantics; HMAC auth with 7-table isolation + memory-prompt fix; column deny policy + INSERT volume gate + measured (flagged-off) NER; pause/resume approvals + Redis in CI; confidence-gated router (97.5% on a 40-case live eval); explicit mock search with labels everywhere; observability (`/metrics`, JSON logs, deep health, secrets docs). Suite: 302 passed / 10 skipped (312 collected). Detail: `STATUS.md` and the root `report.md` (harsh-critic edition).
 - **v1.6.7** (Sep 2026) — Production CI pipeline + deployment guidance:
   - CI rewritten as five project-specific gates (static bug-class lint,
     SQLite suite + real uvicorn `/health` boot probe, postgres:16 suite,
@@ -233,14 +252,25 @@ The project includes the following significant features and hardening steps:
 - dashboard and query builder UIs
 - SQLite-to-PostgreSQL migration support and CI hardening
 - live-API smoke harness — four fixed prompts assert routing, tool use, and guardrail blocking against any configured provider key (v1.6.5)
+- HMAC session auth with per-user scoping of sessions, traces, approvals, memory, and builder runs (Phase 1)
+- pause/resume approvals that release the worker thread (Phase 3)
+- confidence-gated routing with a tracked live-eval number (Phase 4)
+- Prometheus metrics, JSON logs, deep health checks, secrets-management docs (Phase 6)
 
-## Remaining items and optional enhancements
-The remaining items are not blockers; they are value-add improvements:
-- deeper join support in the visual query builder
-- group-by / aggregate support for the query builder
-- more advanced data policies beyond the current allow-list model
-- more production-like RBAC and user identity management
-- optional Redis service in CI to exercise the distributed memory path
+## Remaining items and honest residuals
+Resolved since v1.6.7 (the old list below contradicted the changelog — each item verified against code before closing):
+- builder aggregates/group-by/FK joins: shipped in v1.6.3 and tested. Precise residuals: multi-hop joins, and joins×aggregates (explicitly refused by the builder).
+- data policies beyond the allow-list: shipped (column deny policy, Phase 2).
+- RBAC and user identity: shipped (HMAC auth, `user`/`admin` roles, 20-test isolation suite, Phase 1).
+- Redis service in CI: shipped (service + gated suite, Phase 3, ticket 03 closed).
+
+Still genuinely open (blockers for real users/data, not the demo):
+- first real deployment (App Runner + RDS) with a runbook written during it
+- external adversarial prompts from an independent author (credibility ceiling on the 100%)
+- demo video recording (`docs/DEMO.md` script ready)
+- login/register rate limiting (unthrottled today)
+- per-user data scoping (tenants are isolated by session, not by data)
+- trace retention/archival policy (tables grow unbounded)
 
 ## Conclusion
 This project successfully demonstrates a practical pattern for building an AI agent that can interact with structured data while maintaining explicit safety boundaries. The system proves that useful AI automation is possible when the execution path is constrained by AST-based validation, approval checkpoints, and traceability rather than trust alone.
