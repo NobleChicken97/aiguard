@@ -61,16 +61,16 @@ def test_metrics_exposition_shape():
         assert resp.headers["content-type"].startswith("text/plain")
         body = resp.text
         for series in (
-            "netsentry_sessions_total",
-            "netsentry_tool_calls_total",
-            "netsentry_guardrail_verdicts",
-            "netsentry_approvals_pending",
-            "netsentry_http_requests",
-            "netsentry_uptime_seconds",
+            "aiguard_sessions_total",
+            "aiguard_tool_calls_total",
+            "aiguard_guardrail_verdicts",
+            "aiguard_approvals_pending",
+            "aiguard_http_requests",
+            "aiguard_uptime_seconds",
         ):
             assert series in body, series
-        assert "# HELP netsentry_sessions_total" in body
-        assert "# TYPE netsentry_sessions_total gauge" in body
+        assert "# HELP aiguard_sessions_total" in body
+        assert "# TYPE aiguard_sessions_total gauge" in body
 
 
 def test_metrics_counts_chat_turn():
@@ -86,7 +86,7 @@ def test_metrics_counts_chat_turn():
         webapp_module._chat_llm_client_override = None
     chat_lines = [
         line for line in body.splitlines()
-        if line.startswith("netsentry_http_requests{") and 'path="/api/chat"' in line
+        if line.startswith("aiguard_http_requests{") and 'path="/api/chat"' in line
     ]
     assert chat_lines, "expected an http_requests series for /api/chat"
     assert sum(float(line.rsplit(" ", 1)[1]) for line in chat_lines) >= 1

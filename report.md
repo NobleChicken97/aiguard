@@ -1,4 +1,4 @@
-# NetSentry Status Report — Harsh-Critic Edition
+# AiGuard Status Report — Harsh-Critic Edition
 
 *Date: 2026-09-05. Author: the owner's engineering reviewer, not its builder.
 Standard of evidence: a claim is PROVEN only if a test or a measurement

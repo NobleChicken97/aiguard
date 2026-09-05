@@ -1,4 +1,4 @@
-# Deployment Guide — Agentic System with Safety Guardrails
+# Deployment Guide — AiGuard
 
 Complete deployment instructions for production use, staging, and demo environments.
 

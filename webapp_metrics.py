@@ -161,27 +161,27 @@ def render_prometheus():
             add(f"{name} {value}")
 
     uptime = round(time.monotonic() - _PROCESS_START_MONO, 3)
-    gauge("netsentry_uptime_seconds", "Process uptime in seconds (resets on restart).", uptime)
+    gauge("aiguard_uptime_seconds", "Process uptime in seconds (resets on restart).", uptime)
 
-    gauge("netsentry_sessions_total", "Rows in app_sessions (all time, DB source).", agg["sessions"])
-    gauge("netsentry_messages_total", "Rows in app_messages (all time, DB source).", agg["messages"])
-    gauge("netsentry_tool_calls_total", "Rows in app_tool_calls (all time, DB source).", agg["tool_calls"])
+    gauge("aiguard_sessions_total", "Rows in app_sessions (all time, DB source).", agg["sessions"])
+    gauge("aiguard_messages_total", "Rows in app_messages (all time, DB source).", agg["messages"])
+    gauge("aiguard_tool_calls_total", "Rows in app_tool_calls (all time, DB source).", agg["tool_calls"])
     for tool, count in sorted(agg["tools"].items()):
-        counter("netsentry_tool_calls_by_tool", "Tool calls split by tool name (DB source).", count, {"tool": tool})
+        counter("aiguard_tool_calls_by_tool", "Tool calls split by tool name (DB source).", count, {"tool": tool})
     for verdict, count in sorted(agg["verdicts"].items()):
-        counter("netsentry_guardrail_verdicts", "Guardrail verdicts seen in recent trace events (DB source).", count, {"verdict": verdict})
-    gauge("netsentry_approvals_pending", "Approval rows awaiting a decision (DB source).", agg["approvals_pending"])
+        counter("aiguard_guardrail_verdicts", "Guardrail verdicts seen in recent trace events (DB source).", count, {"verdict": verdict})
+    gauge("aiguard_approvals_pending", "Approval rows awaiting a decision (DB source).", agg["approvals_pending"])
     for decision, count in sorted(agg["approvals_decided"].items()):
-        counter("netsentry_approvals_decided", "Approval decisions by outcome (DB source).", count, {"decision": decision})
-    gauge("netsentry_approval_resolve_avg_seconds", "Mean pending-to-decided time over recent approvals (DB source).", round(agg["approval_resolve_avg_seconds"], 3))
-    gauge("netsentry_builder_runs_total", "Rows in app_builder_runs (DB source).", agg["builder_runs"])
-    counter("netsentry_session_cost_usd_total", "Sum of session_end cost estimates (DB source).", round(agg["cost_usd_total"], 6))
-    counter("netsentry_session_tokens_total", "Sum of session_end token counts (DB source).", agg["input_tokens_total"], {"kind": "input"})
-    counter("netsentry_session_tokens_total", "Sum of session_end token counts (DB source).", agg["output_tokens_total"], {"kind": "output"})
+        counter("aiguard_approvals_decided", "Approval decisions by outcome (DB source).", count, {"decision": decision})
+    gauge("aiguard_approval_resolve_avg_seconds", "Mean pending-to-decided time over recent approvals (DB source).", round(agg["approval_resolve_avg_seconds"], 3))
+    gauge("aiguard_builder_runs_total", "Rows in app_builder_runs (DB source).", agg["builder_runs"])
+    counter("aiguard_session_cost_usd_total", "Sum of session_end cost estimates (DB source).", round(agg["cost_usd_total"], 6))
+    counter("aiguard_session_tokens_total", "Sum of session_end token counts (DB source).", agg["input_tokens_total"], {"kind": "input"})
+    counter("aiguard_session_tokens_total", "Sum of session_end token counts (DB source).", agg["output_tokens_total"], {"kind": "output"})
 
     for method, path, status, count, total in _http_snapshot():
         labels = {"method": method, "path": path, "status": status}
-        counter("netsentry_http_requests", "Endpoint hits (in-process, resets on restart).", count, labels)
-        counter("netsentry_http_request_seconds", "Summed endpoint latency in seconds (in-process).", round(total, 6), labels)
+        counter("aiguard_http_requests", "Endpoint hits (in-process, resets on restart).", count, labels)
+        counter("aiguard_http_request_seconds", "Summed endpoint latency in seconds (in-process).", round(total, 6), labels)
 
     return "\n".join(lines) + "\n"

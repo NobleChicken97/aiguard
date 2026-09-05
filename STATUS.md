@@ -1,4 +1,7 @@
-# NetSentry — Ground-Truth Status (Phase 0)
+# AiGuard — Ground-Truth Status (Phase 0)
+
+> Renamed from NetSentry to AiGuard (Sep 2026). Dated entries below keep
+> the original name as written — history is not rewritten.
 
 > Measured, not assumed. Generated 2026-09-04 from a real coverage run +
 > config audit + stub grep + backlog verification. This file is the source

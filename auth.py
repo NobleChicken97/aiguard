@@ -30,7 +30,7 @@ from db.database import get_connection
 
 logger = get_logger("auth")
 
-SESSION_COOKIE = "netsentry_session"
+SESSION_COOKIE = "aiguard_session"
 SESSION_TTL_SECONDS = 7 * 24 * 3600  # 7 days
 
 _secret = None

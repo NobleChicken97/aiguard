@@ -110,7 +110,7 @@ async def lifespan(app: FastAPI):
         sse_max_per_ip=config.SSE_MAX_PER_IP,
     )
     logger.info(
-        "agentic-guardrails started | chat_per_min=%s sse_max_per_ip=%s",
+        "aiguard started | chat_per_min=%s sse_max_per_ip=%s",
         config.CHAT_RATE_PER_MIN,
         config.SSE_MAX_PER_IP,
     )
@@ -118,7 +118,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Agentic Guardrails Demo",
+    title="AiGuard Demo",
     version="1.0.0",
     lifespan=lifespan,
 )

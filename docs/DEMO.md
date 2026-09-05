@@ -1,4 +1,4 @@
-# NetSentry Demo Script (2–3 minutes)
+# AiGuard Demo Script (2–3 minutes)
 
 Record: browser at `/register` + terminal tailing logs. Total: ~5 shots.
 

@@ -1,6 +1,6 @@
 name: CI
 
-# Project-specific quality gates for NetSentry (FastAPI agent + SQL guardrails):
+# Project-specific quality gates for AiGuard (FastAPI agent + SQL guardrails):
 #   static-checks  — dependency consistency, bug-class lint (ruff E9/F), module importability
 #   test-sqlite    — adversarial guardrail suite + full 200+ test suite on the SQLite
 #                    default path (plus a redis service so the Redis-gated STM

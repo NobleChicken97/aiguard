@@ -1,4 +1,4 @@
-# NetSentry Build Plan
+# AiGuard Build Plan
 
 ## Repo / project layout
 - main.py — CLI entry point for interactive or single-prompt execution

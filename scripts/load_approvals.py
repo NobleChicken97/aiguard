@@ -23,7 +23,7 @@ import tempfile
 import time
 from uuid import uuid4
 
-_tmp = tempfile.mkdtemp(prefix="netsentry-load-")
+_tmp = tempfile.mkdtemp(prefix="aiguard-load-")
 os.environ["DB_PATH"] = os.path.join(_tmp, "load.db")
 sys.path.insert(0, ".")
 
@@ -120,7 +120,7 @@ def main(argv=None):
 
     ok = [r for r in results if r[1]]
     holds = [r[2] for r in ok]
-    print(f"\nNetSentry approval load probe — n={args.n}")
+    print(f"\nAiGuard approval load probe — n={args.n}")
     print("=" * 68)
     print(f"paused fast : {len(ok)}/{len(results)}")
     if holds:

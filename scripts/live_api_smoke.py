@@ -199,7 +199,7 @@ def overall_exit_code(results):
 
 
 def _print_report(results, provider, model):
-    print(f"\nNetSentry live smoke — provider={provider} model={model}")
+    print(f"\nAiGuard live smoke — provider={provider} model={model}")
     print("=" * 68)
     for r in results:
         status = "PASS" if r.passed else "FAIL"

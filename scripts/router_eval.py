@@ -146,7 +146,7 @@ def summarize(results):
 
 
 def _print_report(results, summary, provider, model, bar):
-    print(f"\nNetSentry router eval — provider={provider} model={model} (40 cases)")
+    print(f"\nAiGuard router eval — provider={provider} model={model} (40 cases)")
     print("=" * 68)
     for r in results:
         flag = "DEFER" if r.deferred else ("ok" if r.correct else "MISS")

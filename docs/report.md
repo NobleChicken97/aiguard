@@ -1,4 +1,4 @@
-# Agentic System with Safety Guardrails — Final Report
+# AiGuard — Final Report
 
 ## Executive Summary
 This project is a safety-focused Python agent for database-driven tasks. It combines a small orchestration loop, allow-listed SQL execution, automatic refusal of destructive patterns, and a human approval gate for higher-risk actions. The overall value proposition is not “fully autonomous database administration”; it is “useful AI assistance with clear safety boundaries, traceability, and approval checkpoints.”

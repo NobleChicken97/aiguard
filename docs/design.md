@@ -1,4 +1,4 @@
-# NetSentry Technical Design
+# AiGuard Technical Design
 
 ## High-level architecture
 

@@ -1,6 +1,6 @@
-# Agentic System with Safety Guardrails 🛡️
+# AiGuard 🛡️
 
-**NetSentry Capstone Project — Advanced AI Engineering**
+**AiGuard** — a safety-first agentic system with tool use, memory, and SQL guardrails. Capstone project, Advanced AI Engineering.
 
 [![CI](https://github.com/NobleChicken97/agentic_guardrails/actions/workflows/ci.yml/badge.svg)](https://github.com/NobleChicken97/agentic_guardrails/actions/workflows/ci.yml)
 
@@ -38,7 +38,7 @@ Most "AI agent" portfolio projects are thin wrappers around a single tool call w
 1. **Reliability** — Does the system recover gracefully from failed tool calls, or does it hallucinate success?
 2. **Safety** — Can the agent be stopped *before* it does damage?
 
-**NetSentry proves both.** This system can touch a real database with a **100% block rate on destructive queries**, demonstrated through a curated adversarial prompt test suite.
+**AiGuard proves both.** This system can touch a real database with a **100% block rate on destructive queries**, demonstrated through a curated adversarial prompt test suite.
 
 ---
 
@@ -571,6 +571,6 @@ This is a capstone project. For questions or to report issues, contact the devel
 
 ---
 
-**Built for: AI Engineering Portfolio Project 02 — Agentic System with Tool Use, Memory, and Safety Guardrails**
+**Built for: AI Engineering Portfolio Project 02 — AiGuard**
 
 *Built with ❤️ for production-ready AI agent systems.*

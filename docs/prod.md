@@ -1,7 +1,7 @@
-# NetSentry Product Requirements
+# AiGuard Product Requirements
 
 ## Vision
-NetSentry is a safety-first AI assistant that can answer questions and use tools in a real data environment without becoming destructive or careless. The core idea is simple: let the agent do useful work while enforcing explicit limits before anything risky reaches a database or a production workflow.
+AiGuard is a safety-first AI assistant that can answer questions and use tools in a real data environment without becoming destructive or careless. The core idea is simple: let the agent do useful work while enforcing explicit limits before anything risky reaches a database or a production workflow.
 
 ## Target users
 - Students and portfolio reviewers evaluating agent safety patterns
