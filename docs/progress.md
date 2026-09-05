@@ -470,3 +470,10 @@ Per the approved design (clarify on garbage):
 1. **Auth CSRF**: login/register POSTs carry the double-submit token (403 otherwise); logout intentionally token-less.
 2. **Resume janitor**: opportunistic in-transaction purge of decided rows older than 24h; undecided rows never touched.
 3. **Resume budgets**: token counters persisted on pause and restored on resume (auto-migrated columns); 3 new pinning tests.
+
+## Rebrand to AiGuard + EC2 Deploy (Sep 5, 2026)
+**Status:** ✅ Completed
+
+1. **Rebrand**: user-visible surfaces → AiGuard (UI titles, README, docs, metrics prefix, session cookie, FastAPI title); identifiers → `aiguard-*` (compose containers, PG user/db, package + console script, `tools/mock_web_search.py`, GitHub repo). Dated history and `app_*` tables deliberately untouched.
+2. **EC2 free-tier deploy** (App Runner unavailable: account lacks the service subscription + GitHub OAuth needs console): `t3.micro` AL2023 + `docker-compose.prod.yml` (Caddy TLS) + SSM-only access, EIP `35.154.128.112`, `https://aiguard.noblechicken.me` live with trusted cert. AWS identifiers renamed in place (tags, SG swap, IAM role/profile swap with one ghost-association hiccup, old resources deleted).
+3. Box incident handled: a half-applied rename window (stale checkout) left mixed creds; recovered via full teardown + `reset --hard` + fresh rebuild, root-caused in the summary.
