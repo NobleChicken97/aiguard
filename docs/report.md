@@ -144,7 +144,9 @@ No live deployment exists yet: everything above is local/CI validation. The depl
 
 ### Version history
 
-- **Post-v1.6.7 (Sep 2026) — Phases 0–7:** ground-truth audit (90% per-module coverage); safe cost default + fail-closed token semantics; HMAC auth with 7-table isolation + memory-prompt fix; column deny policy + INSERT volume gate + measured (flagged-off) NER; pause/resume approvals + Redis in CI; confidence-gated router (97.5% on a 40-case live eval); explicit mock search with labels everywhere; observability (`/metrics`, JSON logs, deep health, secrets docs). Suite: 303 passed / 10 skipped (313 collected). Detail: `STATUS.md` and the root `report.md` (harsh-critic edition).
+- **v1.7.1 (Sep 2026) — Harsh-critic live audit fixes:** P0 PG SELECT rendered headers as data (keyed-access fix + PG-gated regression); P0 `/api/chat` session hijack → 404; auth rate limiting on /login + /register; resume/builder throttled; blank-message + length validation; bcrypt 72-byte cap; `create_user` blanket-except fix; Windows-safe `reset_db`; SEO (robots.txt, favicon, meta/OG/canonical). Live-verified after deploy (Chicago→real row, count→10, hijack→404, blank→422). Suite: 311 passed / 11 skipped.
+- **v1.7.0 (Sep 2026) — First live deployment:** EC2 free-tier + Caddy TLS at https://aiguard.noblechicken.me; live battery (normal/refusal/gated-write/resume) + redeploy-survival proof. Suite: 303 passed / 10 skipped at ship.
+- **Post-v1.6.7 (Sep 2026) — Phases 0–7:** ground-truth audit (90% per-module coverage); safe cost default + fail-closed token semantics; HMAC auth with 7-table isolation + memory-prompt fix; column deny policy + INSERT volume gate + measured (flagged-off) NER; pause/resume approvals + Redis in CI; confidence-gated router (97.5% on a 40-case live eval); explicit mock search with labels everywhere; observability (`/metrics`, JSON logs, deep health, secrets docs). Detail: `STATUS.md` and the root `report.md` (harsh-critic edition).
 - **v1.6.7** (Sep 2026) — Production CI pipeline + deployment guidance:
   - CI rewritten as five project-specific gates (static bug-class lint,
     SQLite suite + real uvicorn `/health` boot probe, postgres:16 suite,
@@ -268,7 +270,7 @@ Still genuinely open (blockers for real users/data, not the demo):
 - first real deployment (App Runner + RDS) with a runbook written during it
 - external adversarial prompts from an independent author (credibility ceiling on the 100%)
 - demo video recording (`docs/DEMO.md` script ready)
-- login/register rate limiting (unthrottled today)
+- login/register rate limiting — **done** (`AUTH_RATE_PER_MIN`, v1.7.1)
 - per-user data scoping (tenants are isolated by session, not by data)
 - trace retention/archival policy (tables grow unbounded)
 

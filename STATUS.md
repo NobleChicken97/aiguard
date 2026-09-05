@@ -195,8 +195,11 @@ env-deterministic (PG/Redis), and consecutive full runs agreed at
 302/10 (312 collected) before one legitimate addition (the multi-hop
 regression test below moved the baseline to 303/10, 313 collected).
 Most plausible cause is a truncated-output misread
-on my part — owned as such. Rule going forward: if any future run deviates
-from 303 passed / 10 skipped, treat it as a flakiness signal and hunt
+on my part — owned as such. Current baseline after the v1.7.1 audit:
+311 passed / 11 skipped (one PG-gated SELECT-format regression test added;
+`deviation` now means "a number that isn't 311/11 AND can't be explained
+by an intentional test/FIX add"). Rule going forward: if any future run
+deviates from that baseline, treat it as a flakiness signal and hunt
 (shared process-global suspects, in order: `webapp_metrics` counters,
 `RL_STATE` buckets, Redis verdict cache, TestClient lifespan config,
 FakeLLMClient shared override) — do not re-explain, do not tune.
@@ -221,3 +224,17 @@ the builder must update all four files or say why not.
 ## Live deployment (2026-09-05)
 
 `https://aiguard.noblechicken.me` on free-tier EC2 (v1.7.0 evidence in `docs/report.md`). The "no live deployment" residual is closed; remaining human items are now just external-5 and the video.
+
+## v1.7.1 — Harsh-critic live+code audit (2026-09-05)
+
+Found by actually using production (live battery), then verified in code:
+
+1. **P0 — PG SELECT rendered headers as data** (live: "Which customers live in Chicago?" returned the header row). `_format_rows` iterated rows positionally; psycopg2 `RealDictRow` iterates KEYS while sqlite3.Row iterates VALUES. Fixed to keyed access; hermetic test + PG-gated regression test (CI-PG now covers it).
+2. **P0 — session hijack**: `/api/chat` with a foreign `session_id` silently took over the conversation (`load_session` trusts the id). Now 404s for non-owners (same check on `/api/chat/resume`).
+3. **Auth throttle**: `/login` + `/register` had zero rate limiting (unlimited password guessing + account spam) — top prior finding. Now `AUTH_RATE_PER_MIN` (default 30, IP-keyed, 0 disables); `/api/chat/resume` and `/api/query-builder/run` also share the chat budget now.
+4. **Input validation**: blank/whitespace chat message → 422; chat message length capped; `ResumeRequest.session_id` min_length.
+5. **bcrypt 72-byte cap** + `create_user` blanket-`except` fixed (an over-limit password reported as "already registered" — test caught it).
+6. **`reset_db` Windows-safety**: paused turns leaked `LongTermMemory`/`TraceLogger` connections → `os.remove` silently failed → suite isolation corrupted (rows accumulated). Fixed the leak (orchestrator closes on pause) AND made `reset_db` fall back to DROP-ALL (works with open handles under WAL).
+7. **SEO/hygiene**: `robots.txt` (disallow all — login-gated, paid-LLM demo), `favicon.ico` (404 killer), meta description + OpenGraph + canonical in `base.html`.
+8. Live-verified after deploy: Chicago→Henry Wilson (masked), count→10, hijack→404, blank→422, robots/favicon→200.
+9. Suite: 311 passed / 11 skipped (was 303/10; + new tests, +1 PG-gated).

@@ -5,6 +5,16 @@ Standard of evidence: a claim is PROVEN only if a test or a measurement
 names it; everything else is CLAIMED or MISSING. File references point at
 `main` @ `d22af37` and later fix commits.*
 
+> **Resolved since writing (2026-09-05, v1.7.1):** §3.1 login/register is
+> now throttled (`AUTH_RATE_PER_MIN`); §2 row 3 the authz suite is now
+> 23 tests incl. session-hijack; §2 row 8 the app **is deployed** at
+> https://aiguard.noblechicken.me (EC2 free-tier + Caddy TLS — App Runner
+> was unavailable: no service subscription) and survived a live battery +
+> redeploy; §5 "must fix" login throttle is done. Audit-triggered
+> production bugs also fixed: PG SELECT rendered headers as data, and
+> `/api/chat` foreign-session hijack. The remaining-now: data-tenancy
+> decision, retention, `Secure` cookie runbook, provider timeouts.
+
 ---
 
 ## 1. Verdict up front
