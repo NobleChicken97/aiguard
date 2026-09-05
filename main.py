@@ -82,7 +82,7 @@ def run_interactive(user_id, approval_mode):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Run the agentic guardrails demo.")
+    parser = argparse.ArgumentParser(description="Run the AiGuard demo.")
     parser.add_argument("--user-id", default="default", help="User id to associate with the session.")
     parser.add_argument(
         "--approval-mode",

@@ -155,7 +155,7 @@ Decision (user): explicit mock now; live integration needs a provider key nobody
 
 1. Renamed `WebSearchTool` → `MockWebSearchTool`, tool name `web_search` → `mock_web_search` (visible in traces + dashboard tool table). The old export is gone (`tools.WebSearchTool` raises AttributeError — pinned by test).
 2. Labeled everywhere live: `DEMO STUB — canned results, never claim live browsing` in the LLM-facing description, worker instructions, and `SYSTEM_PROMPT` (model honesty, not just UI honesty); chat UI banner (Phase 0.5); README dispatcher line; design/plan/report notes; module + class docstrings with the future Tavily/Brave seam documented (env shape, caps, spend guard).
-3. Deliberately NOT renamed: the module file `tools/web_search.py` (import churn + history for zero user-visible gain; its docstring leads with the stub label) and the historical progress/STATUS entries (they describe past states accurately).
+3. Renamed with the rest in the AiGuard pass: the module file is now `tools/mock_web_search.py` (with all imports); historical progress/STATUS entries keep old paths where they describe past states.
 4. Enforcement tests now route RESEARCH so the mock genuinely executes (previously "tool not found" vacuously).
 5. **Tests**: `test_websearch_mock.py` (6 contract tests). Full suite below.
 6. Ops note: this box's C: drive hit 0 bytes free mid-phase (4.6GB reclaimed via `pip cache purge`); the E-errors were SQLite/ruff failing on a full disk, not code. Watch disk before long runs.

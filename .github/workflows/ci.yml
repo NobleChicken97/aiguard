@@ -127,7 +127,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build the production image
-        run: docker build -t netsentry-ci:${{ github.sha }} .
+        run: docker build -t aiguard-ci:${{ github.sha }} .
       - name: Validate the compose file
         run: |
           # compose references .env via env_file; provide an empty one so the

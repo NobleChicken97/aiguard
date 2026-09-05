@@ -6,7 +6,7 @@
 
 **Status:** done (all items, incl. the live-smoke gate — verified 2026-09-05)
 
-- [x] Remote added, history pushed (`origin` = NobleChicken97/agentic_guardrails, `main` in sync)
+- [x] Remote added, history pushed (`origin` = NobleChicken97/aiguard — renamed from agentic_guardrails, `main` in sync)
 - [x] CI workflow run is green on the pushed commit (all five gates + release-gate — verified in Actions, incl. the 8 PostgreSQL-gated tests executing)
 - [x] PostgreSQL-gated tests execute (not skip) in the CI run
 - [x] README badge/links updated to the public repo

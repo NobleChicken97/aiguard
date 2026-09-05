@@ -11,9 +11,9 @@ sys.path.insert(0, ".")
 
 import config
 import tools
-import tools.web_search as web_search_module
+import tools.mock_web_search as web_search_module
 from agent.workers import create_research_worker
-from tools.web_search import MockWebSearchTool
+from tools.mock_web_search import MockWebSearchTool
 
 
 def test_class_and_tool_names_say_mock():

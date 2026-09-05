@@ -2,7 +2,7 @@ import config
 from approval.gate import ApprovalPending
 from tools.base import ToolRegistry, execute_with_retry
 from tools.calculator import CalculatorTool
-from tools.web_search import MockWebSearchTool
+from tools.mock_web_search import MockWebSearchTool
 from tools.sql_tool import SQLTool
 from agent.llm_client import ClaudeLLMClient
 

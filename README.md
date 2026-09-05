@@ -2,7 +2,7 @@
 
 **AiGuard** — a safety-first agentic system with tool use, memory, and SQL guardrails. Capstone project, Advanced AI Engineering.
 
-[![CI](https://github.com/NobleChicken97/agentic_guardrails/actions/workflows/ci.yml/badge.svg)](https://github.com/NobleChicken97/agentic_guardrails/actions/workflows/ci.yml)
+[![CI](https://github.com/NobleChicken97/aiguard/actions/workflows/ci.yml/badge.svg)](https://github.com/NobleChicken97/aiguard/actions/workflows/ci.yml)
 
 A production-ready agentic orchestration system that safely executes SQL queries against a real database through a comprehensive guardrail layer, human-in-the-loop approval system, and persistent memory.
 

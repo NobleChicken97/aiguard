@@ -16,7 +16,7 @@ from tools.query_builder import (
     run_builder_query,
 )
 from tools.sql_tool import SQLTool
-from tools.web_search import MockWebSearchTool
+from tools.mock_web_search import MockWebSearchTool
 
 __all__ = [
     # Base

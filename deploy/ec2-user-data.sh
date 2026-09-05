@@ -2,9 +2,9 @@
 # EC2 first-boot bring-up for the free-tier single-box deploy.
 # Rendered at launch time with placeholders filled (the rendered file with
 # secrets is NEVER committed): __DOMAIN__, __LLM_API_KEY__, __SESSION_SECRET__.
-# Logs to /var/log/netsentry-bringup.log on the box.
+# Logs to /var/log/aiguard-bringup.log on the box.
 set -eux
-exec > /var/log/netsentry-bringup.log 2>&1
+exec > /var/log/aiguard-bringup.log 2>&1
 
 # Swap: the 1 GB box needs breathing room (NER model + PG + app).
 fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
@@ -26,8 +26,8 @@ if ! dnf install -y docker-compose-plugin; then
 fi
 
 # App source + secrets (root-only file, never in the repo).
-mkdir -p /opt/netsentry && cd /opt/netsentry
-git clone https://github.com/NobleChicken97/agentic_guardrails.git .
+mkdir -p /opt/aiguard && cd /opt/aiguard
+git clone https://github.com/NobleChicken97/aiguard.git .
 cat > .env <<'ENVEOF'
 LLM_PROVIDER=groq
 LLM_API_KEY=__LLM_API_KEY__
@@ -35,7 +35,7 @@ SESSION_SECRET=__SESSION_SECRET__
 SESSION_COST_BUDGET_USD=0.50
 LOG_LEVEL=INFO
 LOG_FORMAT=json
-DATABASE_URL=postgresql://admin:password@postgres:5432/agentic_db
+DATABASE_URL=postgresql://aiguard:password@postgres:5432/aiguard_db
 ENVEOF
 chmod 600 .env
 

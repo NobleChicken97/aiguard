@@ -129,7 +129,7 @@ This copies schema + demo rows + app rows (13 tables, FK-safe order). The
 ### Part C — App Runner service (~10 min, console)
 
 1. App Runner → **Create service** → Source: **Source code repository** →
-   connect GitHub (`NobleChicken97/agentic_guardrails`, branch `main`).
+   connect GitHub (`NobleChicken97/aiguard`, branch `main`).
    Deployment trigger: **Automatic** (every push redeploys).
 2. Build settings → Runtime: **Python 3.11** → Build command:
    `pip install -r requirements.txt` → Start command:
