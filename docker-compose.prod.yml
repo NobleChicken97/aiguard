@@ -13,7 +13,7 @@ services:
     restart: unless-stopped
   caddy:
     image: caddy:2-alpine
-    container_name: agentic-caddy
+    container_name: aiguard-caddy
     ports:
       - "80:80"
       - "443:443"
