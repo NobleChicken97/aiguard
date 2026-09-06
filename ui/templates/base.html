@@ -531,6 +531,47 @@
       #turns-box::before, .turn::before, .turn::after,
       .tree-rail .session-link.active::after { display: none; }
     }
+
+    /* Level 3: every event hangs off its turn on a lighter sub-spine,
+       so the chain reads session → turn → event. Scoped to .turn so
+       timelines on other pages are untouched. */
+    .turn .turn-body { position: relative; padding-left: 1.4rem; }
+    .turn .turn-body::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0.5rem; bottom: 0.9rem;
+      width: 1.5px;
+      background: var(--moss-deep);
+      opacity: 0.3;
+      border-radius: 2px;
+    }
+    .turn .event { position: relative; transition: background 0.18s ease; border-radius: 0 8px 8px 0; }
+    .turn .event:hover { background: var(--panel); }
+    .turn .event::before {
+      content: '';
+      position: absolute;
+      left: -1.4rem;
+      top: 1.5rem;
+      width: 1.4rem;
+      height: 1.5px;
+      background: var(--moss-deep);
+      opacity: 0.3;
+    }
+    .turn .event::after {
+      content: '';
+      position: absolute;
+      left: calc(-1.4rem - 2.5px);
+      top: calc(1.5rem - 2.5px);
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--paper);
+      border: 1.5px solid var(--moss-deep);
+      opacity: 0.75;
+    }
+    @media (max-width: 46rem) {
+      .turn .turn-body { padding-left: 0; }
+      .turn .turn-body::before, .turn .event::before, .turn .event::after { display: none; }
+    }
     #chat-history .event.is-user { border-top: 1px solid var(--moss-deep); }
     #chat-history { scrollbar-width: thin; }
 

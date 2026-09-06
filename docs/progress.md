@@ -505,3 +505,4 @@ Per the approved design (clarify on garbage):
 3. **Tree connectors**: moss trunk from the selected session card to a spine, one headed branch stub per turn (dot fills when open); sessions hover-slide + press, turns hover-tint, `+`/`−` badge inverts on open, turn bodies animate in; selected session is a filled card with inset bar; `N turns · session <id>` head line; long titles ellipsize. Connectors hidden on mobile.
 4. **Sticky colophon**: `body` is a 100vh flex column with the shell growing, so the footer sits at the viewport bottom on short pages.
 5. Verification: targeted 54/1 template tests green, Jinja render smoke (active-tab ×3 states, tree head, drift CSS) clean.
+6. Level-3 connectors: events hang off their turn on a lighter sub-spine with smaller heads (scoped to `.turn`); event rows tint on hover; hidden on mobile.
