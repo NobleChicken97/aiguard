@@ -89,10 +89,13 @@
       outline-offset: 2px;
     }
 
+    /* Sticky colophon: the footer rides the viewport bottom on short pages. */
+    body { min-height: 100vh; display: flex; flex-direction: column; }
     .shell {
       width: min(1720px, 100% - clamp(1rem, 4vw, 4rem));
       margin: 0 auto;
       padding: 1.5rem 0 3rem;
+      flex: 1 0 auto;
     }
     .prose-cap { max-width: 44rem; }
     .convo-cap { max-width: 56rem; }
@@ -107,9 +110,15 @@
     .wallpaper .orbit {
       position: absolute; top: -150px; right: -110px;
       width: 430px; height: 430px; opacity: 0.55;
+      animation: orbit-drift 110s ease-in-out infinite alternate;
     }
     .wallpaper .orbit svg { width: 100%; height: 100%; animation: orbit-spin 140s linear infinite; }
     @keyframes orbit-spin { to { transform: rotate(360deg); } }
+    /* Slow ambient drift so the ring roams instead of parking in a corner. */
+    @keyframes orbit-drift {
+      from { transform: translate(0, 0); }
+      to { transform: translate(-9vw, 11vh); }
+    }
 
     /* Masthead: wordmark left, index right, double rule below. */
     .masthead {
@@ -161,6 +170,12 @@
       border: 1px solid transparent;
     }
     .nav a:hover { border-color: var(--hairline); background: var(--panel); text-decoration: none; }
+    .nav a.active {
+      background: var(--ink);
+      color: var(--paper);
+      border-color: var(--ink);
+    }
+    .nav a.active:hover { background: var(--ink); color: var(--paper); }
     .nav .who {
       font-family: var(--mono);
       font-size: 0.78rem;
@@ -429,6 +444,93 @@
     @media (max-width: 46rem) {
       .tree-wrap, .tree-wrap.deep { grid-template-columns: 1fr; }
     }
+
+    /* Trace tree connectors: one trunk out of the selected session,
+       splitting at the spine into a headed branch per turn. */
+    .tree-rail { position: relative; }
+    .tree-rail .session-link {
+      position: relative;
+      transition: transform 0.18s ease, background 0.18s ease;
+    }
+    .tree-rail .session-link:hover { transform: translateX(3px); }
+    .tree-rail .session-link:active { transform: translateX(1px) scale(0.99); }
+    .tree-rail .session-name {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .tree-rail .session-link.active {
+      background: #E9EDDC;
+      border: 1px solid var(--moss-deep);
+      border-radius: 10px;
+      box-shadow: inset 3px 0 0 var(--moss-deep);
+      padding: 0.8rem;
+      font-weight: 600;
+    }
+    /* Trunk: single line from the selected session to the spine. */
+    .tree-rail .session-link.active::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      right: -1.75rem;
+      width: 1.75rem;
+      height: 1.5px;
+      background: var(--moss-deep);
+      opacity: 0.7;
+    }
+    #turns-box { position: relative; padding-left: 1.5rem; }
+    #turns-box::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 1.4rem; bottom: 1.4rem;
+      width: 1.5px;
+      background: var(--moss-deep);
+      opacity: 0.45;
+      border-radius: 2px;
+    }
+    .turn { position: relative; }
+    .turn::before {
+      content: '';
+      position: absolute;
+      left: -1.5rem;
+      top: 1.35rem;
+      width: 1.5rem;
+      height: 1.5px;
+      background: var(--moss-deep);
+      opacity: 0.45;
+    }
+    .turn::after {
+      content: '';
+      position: absolute;
+      left: calc(-1.5rem - 3.5px);
+      top: calc(1.35rem - 3.5px);
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--paper);
+      border: 1.5px solid var(--moss-deep);
+      transition: background 0.18s ease;
+    }
+    .turn[open]::after { background: var(--moss-deep); }
+    .turn summary { border-radius: 8px; transition: background 0.18s ease, padding 0.18s ease; }
+    .turn summary:hover { background: var(--panel); padding-left: 0.5rem; }
+    .turn summary:active { transform: scale(0.995); }
+    .turn summary .mark { transition: background 0.2s ease, color 0.2s ease; }
+    .turn[open] summary .mark { background: var(--moss-deep); color: var(--paper); border-color: var(--moss-deep); }
+    details.turn[open] .turn-body { animation: turn-in 0.28s ease; }
+    @keyframes turn-in { from { opacity: 0; translate: 0 -5px; } to { opacity: 1; translate: 0 0; } }
+    .turns-head {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin: 0 0 0.4rem 0.1rem;
+    }
+    @media (max-width: 46rem) {
+      #turns-box { padding-left: 0; }
+      #turns-box::before, .turn::before, .turn::after,
+      .tree-rail .session-link.active::after { display: none; }
+    }
     #chat-history .event.is-user { border-top: 1px solid var(--moss-deep); }
     #chat-history { scrollbar-width: thin; }
 
@@ -506,6 +608,7 @@
     @media (prefers-reduced-motion: reduce) {
       .js .rv-pre { opacity: 1; translate: none; transition: none; }
       .wallpaper .orbit svg { animation: none; }
+      .wallpaper .orbit { animation: none; }
       .badge { transform: none; }
       *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
     }
@@ -533,13 +636,14 @@
   <main class="shell">
     <header class="masthead">
       <a class="wordmark" href="/chat">AiGuard<small>guarded instrument · no. 01</small></a>
-      <nav class="nav" aria-label="Primary">
-        <a href="/chat">Chat</a>
-        <a href="/dashboard">Dashboard</a>
-        <a href="/query-builder">Query Builder</a>
-        <a href="/approval-queue">Approval Queue</a>
-        <a href="/traces">Trace Replay</a>
-        <a href="/memory-inspector">Memory Inspector</a>
+        <nav class="nav" aria-label="Primary">
+        {% set navpath = request.url.path if request is defined else '' %}
+        <a href="/chat"{% if navpath == '/chat' %} class="active" aria-current="page"{% endif %}>Chat</a>
+        <a href="/dashboard"{% if navpath == '/dashboard' %} class="active" aria-current="page"{% endif %}>Dashboard</a>
+        <a href="/query-builder"{% if navpath == '/query-builder' %} class="active" aria-current="page"{% endif %}>Query Builder</a>
+        <a href="/approval-queue"{% if navpath == '/approval-queue' %} class="active" aria-current="page"{% endif %}>Approval Queue</a>
+        <a href="/traces"{% if navpath.startswith('/traces') %} class="active" aria-current="page"{% endif %}>Trace Replay</a>
+        <a href="/memory-inspector"{% if navpath == '/memory-inspector' %} class="active" aria-current="page"{% endif %}>Memory Inspector</a>
         {% if current_user %}
         <span class="who">{{ current_user.email }} · {{ current_user.role }}</span>
         <form method="post" action="/logout" style="display: inline; margin: 0;">

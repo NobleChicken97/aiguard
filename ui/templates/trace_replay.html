@@ -21,6 +21,7 @@
   </nav>
   <div id="turns-box">
     {% if turns %}
+    <p class="turns-head rv">{{ turns|length }} turn{{ 's' if turns|length != 1 }} · session {{ selected_session_id[:8] }}</p>
     {% for turn in turns %}
     <details class="turn rv">
       <summary>

@@ -496,3 +496,12 @@ Per the approved design (clarify on garbage):
 3. **Trace tree**: `group_trace_turns()` in `webapp.py` (user_message → turn, events nested, leading events attach to first turn); template rebuilt as sessions rail → turn `<details>` → events, rail narrows via `.deep` when a turn opens; long JSON wraps instead of clipping.
 4. **Reveal failsafe**: threshold 0.02 + 400px bottom rootMargin, `load` sweep, `pageshow` re-observe for bfcache, 1200ms viewport sweep — content can never stay stuck hidden.
 5. Verification: 323/11 suite green, Jinja render smoke on trace + base pages clean, `group_trace_turns` unit assertions pass.
+
+## Frontend Follow-ups II — Nav, Drift, Tree Connectors, Sticky Footer (Sep 6, 2026)
+**Status:** ✅ Completed (local; redeploy on the box to see live)
+
+1. **Active tab**: current page renders as an ink pill (`aria-current="page"`); `/traces/{id}` keeps Trace Replay lit. Safe when `request` is absent.
+2. **Ring drift**: orbit wrapper roams on a 110s alternate path while the ring itself spins; reduced-motion disables both.
+3. **Tree connectors**: moss trunk from the selected session card to a spine, one headed branch stub per turn (dot fills when open); sessions hover-slide + press, turns hover-tint, `+`/`−` badge inverts on open, turn bodies animate in; selected session is a filled card with inset bar; `N turns · session <id>` head line; long titles ellipsize. Connectors hidden on mobile.
+4. **Sticky colophon**: `body` is a 100vh flex column with the shell growing, so the footer sits at the viewport bottom on short pages.
+5. Verification: targeted 54/1 template tests green, Jinja render smoke (active-tab ×3 states, tree head, drift CSS) clean.
