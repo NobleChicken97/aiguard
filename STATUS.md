@@ -68,7 +68,7 @@ Full suite at default backoff takes noticeably longer (sleep-dominated).
 
 ## 4. Backlog 01–11: closed vs actually open
 
-Verified against `.scratch/netsentry-vnext/issues/` ticket files + `git`:
+Verified against `.scratch/aiguard-vnext/issues/` ticket files + `git`:
 
 | Ticket | File status | Ground truth |
 |---|---|---|

@@ -270,7 +270,7 @@ version: '3.8'
 services:
   api:
     build: .
-    container_name: netsentry_api
+    container_name: aiguard_api
     ports:
       - "8000:8000"
     environment:
@@ -290,7 +290,7 @@ services:
 
 networks:
   default:
-    name: netsentry_network
+    name: aiguard_network
 ```
 
 ### Docker Management Commands
@@ -357,7 +357,7 @@ docker-compose exec api cp /app/data/guardrails.db /app/data/guardrails.db.backu
    - Select "Web Service"
    - Connect to your repository
    - Configure:
-     - **Name**: `netsentry-ai-agent`
+     - **Name**: `aiguard-ai-agent`
      - **Region**: `Oregon (us-west-2)` (closest to your users)
      - **Environment**: `Python 3`
      - **Build Command**: Leave empty (auto-detected)
@@ -432,7 +432,7 @@ app = FastAPI(port=PORT)  # Use configured port
 ```yaml
 # In Render dashboard
 Settings → Variables → Add variable:
-DATABASE_URL=postgresql://user:pass@host:5432/netsentry_db
+DATABASE_URL=postgresql://user:pass@host:5432/aiguard_db
 ```
 
 Update `config.py`:
@@ -484,13 +484,13 @@ python -c "from db.database import initialize_db; import sqlite3; sqlite3.connec
 
 2. **Deploy**
    ```bash
-   eb init netsentry-api
-   eb create netsentry-prod
+   eb init aiguard-api
+   eb create aiguard-prod
    eb deploy
    ```
 
 3. **Access**
-   - URL: `http://netsentry-prod.xxxxx.elasticbeanstalk.com`
+   - URL: `http://aiguard-prod.xxxxx.elasticbeanstalk.com`
 
 ### Google Cloud GKE
 
@@ -502,7 +502,7 @@ python -c "from db.database import initialize_db; import sqlite3; sqlite3.connec
 
 1. **Build Container**
    ```bash
-   gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/netsentry-ai-agent
+   gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/aiguard-ai-agent
    ```
 
 2. **Deploy to GKE**
@@ -517,27 +517,27 @@ python -c "from db.database import initialize_db; import sqlite3; sqlite3.connec
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: netsentry-api
+  name: aiguard-api
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: netsentry-api
+      app: aiguard-api
   template:
     metadata:
       labels:
-        app: netsentry-api
+        app: aiguard-api
     spec:
       containers:
-        - name: netsentry-api
-          image: gcr.io/YOUR_PROJECT_ID/netsentry-ai-agent
+        - name: aiguard-api
+          image: gcr.io/YOUR_PROJECT_ID/aiguard-ai-agent
           ports:
             - containerPort: 8000
           env:
             - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: netsentry-secrets
+                  name: aiguard-secrets
                   key: anthropic-api-key
           resources:
             limits:
@@ -547,10 +547,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: netsentry-api-service
+  name: aiguard-api-service
 spec:
   selector:
-    app: netsentry-api
+    app: aiguard-api
   ports:
     - protocol: TCP
       port: 80
@@ -642,7 +642,7 @@ was the documented path, not the integration).
 - [ ] README.md updated with deployment steps
 - [ ] API documentation accessible
 - [ ] Troubleshooting guide available
-- [ ] Documentation URL created (e.g., `docs.netsentry.ai`)
+- [ ] Documentation URL created (e.g., `docs.aiguard.example.com`)
 
 ### Monitoring
 

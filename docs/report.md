@@ -195,7 +195,7 @@ No live deployment exists yet: everything above is local/CI validation. The depl
     `last_active_at` (auto-migrated), the dashboard's active count is
     meaningful, and finished turns no longer mark rows "ended"
   - Test suite: 153 → 175 (167 pass without PG, 8 PG-gated)
-- **v1.6.2** (Sep 2026) — Security & auditability tickets (from `.scratch/netsentry-vnext/issues/`):
+- **v1.6.2** (Sep 2026) — Security & auditability tickets (from `.scratch/aiguard-vnext/issues/`):
   - `DELETE /api/users/{user_id}/memory/{fact_id}` + inspector delete
     control (ticket 05); delete is user-scoped and 404s cross-user ids
   - CSRF double-submit cookie on the approval endpoints — 403 on

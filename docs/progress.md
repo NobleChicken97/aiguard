@@ -280,7 +280,7 @@ full SQLWorker tool loop proven against a stubbed OpenAI-compatible client.
    activity inside `SESSION_IDLE_MINUTES` (default 15, env-configurable).
    `session_end` remains a trace event. Decision + alternatives recorded in
    `docs/design.md`.
-4. **Ticket board**: `.scratch/netsentry-vnext/issues/` — 04, 05, 06, 07,
+4. **Ticket board**: `.scratch/aiguard-vnext/issues/` — 04, 05, 06, 07,
    08, 09 done. Remaining: 01 (needs an API key), 02/03 (need a GitHub
    remote), 10 (needs a key for accuracy measurement).
 
@@ -289,7 +289,7 @@ Test suite: 153 → 175 tests (167 pass without PG, 8 PG-gated).
 ## v1.6.2 — Security & Auditability Tickets (Sep 1, 2026)
 **Status:** ✅ Completed
 
-Implemented from the tracer-bullet ticket set in `.scratch/netsentry-vnext/issues/`:
+Implemented from the tracer-bullet ticket set in `.scratch/aiguard-vnext/issues/`:
 
 1. **Ticket 05 — Memory fact management**: `DELETE /api/users/{user_id}/memory/{fact_id}`
    backed by a user-scoped `LongTermMemory.delete_fact` (a fact id belonging to
