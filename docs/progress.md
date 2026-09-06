@@ -487,3 +487,12 @@ Per the approved design (clarify on garbage):
 4. **Motion thesis**: focal = approval stamp slam; feedback = bubble slide + button press + first-paint counters; reveals via IntersectionObserver with `.js`-gated hidden states (no-JS/CDN-fail shows everything); reduced-motion path. anime.js v4 UMD pinned, every call try/caught.
 5. **Preserved contracts**: all JS hooks, form actions, CSRF fields, aria attributes, and every test-pinned string verified by a render-smoke script (7 pages + font serving + no dark-theme leaks).
 6. Verification: 323/11 suite green, ruff clean, all 7 inline script blocks `node --check` clean, render smoke ALL-GREEN.
+
+## Frontend Follow-ups — Full-Bleed, Wallpaper, Trace Tree (Sep 6, 2026)
+**Status:** ✅ Completed
+
+1. **Full-bleed**: shell `min(1180px)` → `min(1720px, 100% - clamp(1rem, 4vw, 4rem))`; prose keeps `.prose-cap`/`.convo-cap` readability limits.
+2. **Wallpaper**: fixed contour-line tile (single data-URI paint) + one 140s dashed orbit ring + rAF pointer parallax (transform-only, skipped on reduced-motion/coarse pointers); inert and aria-hidden.
+3. **Trace tree**: `group_trace_turns()` in `webapp.py` (user_message → turn, events nested, leading events attach to first turn); template rebuilt as sessions rail → turn `<details>` → events, rail narrows via `.deep` when a turn opens; long JSON wraps instead of clipping.
+4. **Reveal failsafe**: threshold 0.02 + 400px bottom rootMargin, `load` sweep, `pageshow` re-observe for bfcache, 1200ms viewport sweep — content can never stay stuck hidden.
+5. Verification: 323/11 suite green, Jinja render smoke on trace + base pages clean, `group_trace_turns` unit assertions pass.

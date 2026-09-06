@@ -919,6 +919,7 @@ def traces_index(request: Request):
             "sessions": sessions,
             "selected_session_id": selected_session_id,
             "selected_trace": selected_trace,
+            "turns": group_trace_turns(selected_trace),
             "current_user": user,
         },
     )
@@ -944,6 +945,7 @@ def trace_replay(request: Request, session_id: str):
             "sessions": sessions,
             "selected_session_id": session_id,
             "selected_trace": selected_trace,
+            "turns": group_trace_turns(selected_trace),
             "current_user": user,
         },
     )
@@ -955,3 +957,34 @@ def trace_api(session_id: str, request: Request):
     if user["role"] != "admin" and not owns_session(user["user_id"], session_id):
         raise HTTPException(status_code=404, detail="Session not found.")
     return JSONResponse({"session_id": session_id, "events": get_session_trace(session_id)})
+
+
+def group_trace_turns(events):
+    """Split a session trace into user turns for the tree view.
+
+    Level 1 = session, Level 2 = one turn per user_message, Level 3 = the
+    events that turn produced. Leading events (e.g. session_start) attach to
+    the first turn; a trace with no user_message yields no turns and the
+    template falls back to the flat event list.
+    """
+    turns = []
+    pending = []
+    current = None
+    for event in events or []:
+        if event.get("event_type") == "user_message":
+            data = event.get("data") or {}
+            content = data.get("content", "")
+            if isinstance(content, dict):
+                content = content.get("text", "") or str(content)
+            current = {
+                "text": str(content),
+                "timestamp": event.get("timestamp", ""),
+                "events": pending,
+            }
+            pending = []
+            turns.append(current)
+        elif current is not None:
+            current["events"].append(event)
+        else:
+            pending.append(event)
+    return turns

@@ -90,10 +90,26 @@
     }
 
     .shell {
-      width: min(1180px, calc(100% - 2rem));
+      width: min(1720px, 100% - clamp(1rem, 4vw, 4rem));
       margin: 0 auto;
       padding: 1.5rem 0 3rem;
     }
+    .prose-cap { max-width: 44rem; }
+    .convo-cap { max-width: 56rem; }
+
+    /* Full-viewport wallpaper: static contour tile (one paint) + one slow
+       compositor-only ring. Decorative, inert, hidden from AT. */
+    .wallpaper { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+    .wallpaper .contours {
+      position: absolute; inset: -60px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420' viewBox='0 0 420 420'%3E%3Cg fill='none' stroke='%234C5B38' stroke-width='1' stroke-opacity='0.10'%3E%3Cpath d='M-20 90 C 90 60, 170 120, 300 95 S 430 110, 450 90'/%3E%3Cpath d='M-20 200 C 80 170, 200 230, 320 200 S 430 215, 450 195'/%3E%3Cpath d='M-20 310 C 100 285, 190 335, 310 310 S 430 325, 450 305'/%3E%3Ccircle cx='300' cy='95' r='3'/%3E%3Ccircle cx='120' cy='205' r='3'/%3E%3C/g%3E%3C/svg%3E");
+    }
+    .wallpaper .orbit {
+      position: absolute; top: -150px; right: -110px;
+      width: 430px; height: 430px; opacity: 0.55;
+    }
+    .wallpaper .orbit svg { width: 100%; height: 100%; animation: orbit-spin 140s linear infinite; }
+    @keyframes orbit-spin { to { transform: rotate(360deg); } }
 
     /* Masthead: wordmark left, index right, double rule below. */
     .masthead {
@@ -359,6 +375,60 @@
       font-size: 0.78rem;
       font-variant-numeric: tabular-nums;
     }
+    /* Long JSON stays readable: wrap instead of hiding behind scroll. */
+    .event pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+    /* Trace tree: sessions rail shrinks as turns open deeper. */
+    .tree-wrap {
+      display: grid;
+      grid-template-columns: 230px minmax(0, 1fr);
+      gap: 1.75rem;
+      align-items: start;
+      transition: grid-template-columns 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .tree-wrap.deep { grid-template-columns: 152px minmax(0, 1fr); }
+    .tree-rail { transition: font-size 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+    .tree-wrap.deep .tree-rail { font-size: 0.85em; }
+    .tree-rail .session-link { padding-left: 0.1rem; padding-right: 0.1rem; }
+    .turn { border-top: 1px solid var(--hairline); padding: 0; }
+    .turn summary {
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 1rem;
+      padding: 0.75rem 0.1rem;
+    }
+    .turn summary::-webkit-details-marker { display: none; }
+    .turn summary .q {
+      font-weight: 600;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .turn summary .mark {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--moss-deep);
+      border: 1px solid var(--hairline);
+      border-radius: 6px;
+      padding: 0.05rem 0.45rem;
+      white-space: nowrap;
+    }
+    .turn[open] summary .mark::after { content: "–"; }
+    .turn summary .mark::after { content: "+"; }
+    .turn .turn-body { padding: 0.25rem 0 1.1rem 0.1rem; }
+    .turn .turn-meta {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 0.6rem;
+    }
+    @media (max-width: 46rem) {
+      .tree-wrap, .tree-wrap.deep { grid-template-columns: 1fr; }
+    }
     #chat-history .event.is-user { border-top: 1px solid var(--moss-deep); }
     #chat-history { scrollbar-width: thin; }
 
@@ -435,6 +505,7 @@
 
     @media (prefers-reduced-motion: reduce) {
       .js .rv-pre { opacity: 1; translate: none; transition: none; }
+      .wallpaper .orbit svg { animation: none; }
       .badge { transform: none; }
       *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
     }
@@ -448,6 +519,17 @@
   </style>
 </head>
 <body>
+  <div class="wallpaper" aria-hidden="true">
+    <div class="contours" data-wall="tile"></div>
+    <div class="orbit" data-wall="ring">
+      <svg viewBox="0 0 200 200" fill="none" stroke="#4C5B38" aria-hidden="true">
+        <circle cx="100" cy="100" r="86" stroke-width="1" stroke-dasharray="2 7" opacity="0.5"/>
+        <circle cx="100" cy="100" r="62" stroke-width="1" opacity="0.28"/>
+        <circle cx="186" cy="100" r="3" fill="#4C5B38" stroke="none" opacity="0.6"/>
+        <path d="M100 6v10M100 184v10M6 100h10M184 100h10" stroke-width="1" opacity="0.5"/>
+      </svg>
+    </div>
+  </div>
   <main class="shell">
     <header class="masthead">
       <a class="wordmark" href="/chat">AiGuard<small>guarded instrument · no. 01</small></a>
@@ -494,8 +576,49 @@
           entries.forEach(function (e) {
             if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
           });
-        }, { threshold: 0.12 });
-        els.forEach(function (el) { el.classList.add('rv-pre'); io.observe(el); });
+        }, { threshold: 0.02, rootMargin: '0px 0px 400px 0px' });
+        var watch = function (el) { el.classList.add('rv-pre'); io.observe(el); };
+        els.forEach(watch);
+        var inView = function (el) {
+          var r = el.getBoundingClientRect();
+          return r.bottom > -100 && r.top < window.innerHeight + 420;
+        };
+        var sweep = function () {
+          document.querySelectorAll('.rv-pre:not(.in)').forEach(function (el) {
+            if (inView(el)) { el.classList.add('in'); io.unobserve(el); }
+          });
+        };
+        // Failsafes: late fonts/layout shifts and bfcache restores can leave
+        // observed content hidden until the next scroll. Never trap content.
+        window.addEventListener('load', function () { requestAnimationFrame(sweep); });
+        window.addEventListener('pageshow', function (e) {
+          if (e.persisted) {
+            document.querySelectorAll('.rv-pre:not(.in)').forEach(function (el) {
+              io.unobserve(el); io.observe(el);
+            });
+            sweep();
+          }
+        });
+        setTimeout(sweep, 1200);
+      }
+      // Wallpaper parallax: transform-only, rAF-throttled, skipped for
+      // reduced-motion users and touch pointers. Decorative tile drifts with
+      // the pointer, the ring counter-drifts.
+      var coarse = window.matchMedia('(pointer: coarse)').matches;
+      if (!reduce && !coarse) {
+        var tile = document.querySelector('[data-wall="tile"]');
+        var ring = document.querySelector('[data-wall="ring"]');
+        var tx = 0, ty = 0, queued = false;
+        var paint = function () {
+          queued = false;
+          if (tile) tile.style.transform = 'translate(' + (tx * 10) + 'px,' + (ty * 10) + 'px)';
+          if (ring) ring.style.transform = 'translate(' + (tx * -18) + 'px,' + (ty * -18) + 'px)';
+        };
+        window.addEventListener('pointermove', function (e) {
+          tx = e.clientX / window.innerWidth - 0.5;
+          ty = e.clientY / window.innerHeight - 0.5;
+          if (!queued) { queued = true; requestAnimationFrame(paint); }
+        }, { passive: true });
       }
       var A = (window.anime && window.anime.animate) ? window.anime : null;
       window.AiGuardMotion = {
