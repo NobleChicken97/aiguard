@@ -229,6 +229,20 @@ class Orchestrator:
         self.memory.add_assistant_message([{"type": "text", "text": final_text}])
         self._persist_message("assistant", final_text)
 
+        # Integrity tripwire (Sep 2026 finding): if the answer claims a
+        # destructive action ran but the session trace shows no successful
+        # mutation, log it. Never blocks — makes the mismatch auditable.
+        # The DB read only happens when the regex hits, so normal turns
+        # pay nothing.
+        from agent.integrity import claims_execution, session_mutation_executed
+
+        claimed = claims_execution(final_text)
+        if claimed and not session_mutation_executed(self.session_id):
+            self.trace.log("unverified_execution_claim", {
+                "matched": claimed,
+                "answer_preview": (final_text or "")[:200],
+            })
+
         self.trace.log_final_answer(final_text)
         self._end_session()
         return final_text

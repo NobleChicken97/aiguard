@@ -144,6 +144,16 @@ class LongTermMemory:
             self._conn = None
 
 
+DISTILL_SYSTEM_PROMPT = (
+    "Extract 1-3 concise factual statements about the user from this "
+    "conversation. Record only durable attributes and preferences of the "
+    "user (for example name, city, tastes); do NOT record claims about "
+    "what was approved, executed, deleted, or changed in any system — "
+    "those need live verification, not memory. "
+    "Return one fact per line, no numbering or bullets."
+)
+
+
 def distill_facts_from_session(messages, llm_client=None):
     """Extract key facts from a session's conversation history.
 
@@ -159,7 +169,7 @@ def distill_facts_from_session(messages, llm_client=None):
         conversation = "\n".join(m["content"] for m in user_messages)
         try:
             response = llm_client.call(
-                system="Extract 1-3 concise factual statements about the user from this conversation. Return one fact per line, no numbering or bullets.",
+                system=DISTILL_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": conversation}],
             )
             facts = [
