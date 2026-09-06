@@ -14,7 +14,8 @@
   </div>
 </div>
 
-<div class="grid" style="grid-template-columns: 1.2fr 1fr; align-items:start;">
+<div class="grid rv" style="grid-template-columns: 1.2fr 1fr; align-items:start;">
+  <article class="card">
   <article class="card">
     <div class="card-header">
       <h2>Build Query</h2>
@@ -92,11 +93,11 @@
 
 <style>
   .qb-input {
-    background: rgba(2, 6, 23, 0.7);
-    border: 1px solid var(--panel-border);
-    border-radius: 0.7rem;
+    background: var(--bone);
+    border: 1px solid var(--hairline);
+    border-radius: 9px;
     padding: 0.6rem 0.75rem;
-    color: var(--text);
+    color: var(--ink);
     font: inherit;
     min-width: 9rem;
   }
@@ -104,16 +105,16 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    border: 1px solid rgba(148, 163, 184, 0.18);
+    border: 1px solid var(--hairline);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--panel);
     padding: 0.35rem 0.75rem;
     font-size: 0.85rem;
     cursor: pointer;
   }
   .qb-filter-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-  #results-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; display: block; overflow-x: auto; }
-  #results-table th, #results-table td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid rgba(148, 163, 184, 0.12); white-space: nowrap; }
+  #results-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; display: block; overflow-x: auto; font-variant-numeric: tabular-nums; }
+  #results-table th, #results-table td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--hairline); white-space: nowrap; }
 </style>
 
 <script>

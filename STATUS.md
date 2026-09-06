@@ -189,20 +189,22 @@ Still human: demo video recording.
 
 ## Test-count tripwire (2026-09-05)
 
+## Test-count tripwire (2026-09-05, reconciled 2026-09-06)
+
 The suite total wobbled once (301 vs 302 with no code change). Hunted, not
 explained away: failure cache empty, no xfail markers anywhere, all skips
-env-deterministic (PG/Redis), and consecutive full runs agreed at
-302/10 (312 collected) before one legitimate addition (the multi-hop
-regression test below moved the baseline to 303/10, 313 collected).
-Most plausible cause is a truncated-output misread
-on my part — owned as such. Current baseline after the external-5 pack:
-316 passed / 11 skipped, 322 collected (311/11 before it; +5 red-team).
-`deviation` now means "a number that isn't 323/11 AND can't be explained
-by an intentional test/FIX add"). Rule going forward: if any future run
-deviates from that baseline, treat it as a flakiness signal and hunt
-(shared process-global suspects, in order: `webapp_metrics` counters,
-`RL_STATE` buckets, Redis verdict cache, TestClient lifespan config,
-FakeLLMClient shared override) — do not re-explain, do not tune.
+env-deterministic (PG/Redis). Current baseline, fully reconciled:
+**323 passed / 11 skipped (334 collected)** = 303 baseline + 20 named adds
+(test_authz +5: csrf-403, hijack-chat, hijack-resume, empty-422, bcrypt-72;
+test_pause_resume +3: janitor, token-accounting, legacy-migration;
+test_answer_integrity +7; test_external_redteam +5).
+Most plausible cause of the lone 301 is a truncated-output misread
+on my part — owned as such. Rule going forward: if any future run deviates
+from 323 passed / 11 skipped without a matching named addition, treat it
+as a flakiness signal and hunt (shared process-global suspects, in order:
+`webapp_metrics` counters, `RL_STATE` buckets, Redis verdict cache,
+TestClient lifespan config, FakeLLMClient shared override) — do not
+re-explain, do not tune.
 
 ## Builder scope: decided (2026-09-05)
 

@@ -9,13 +9,13 @@
 </section>
 
 <section class="grid" style="grid-template-columns: minmax(0, 28rem) 1fr;">
-  <article class="card">
+  <article class="card rv">
     <div class="card-header">
       <h2>Sign in</h2>
     </div>
     <div class="card-body">
       {% if error %}
-      <div class="approval" role="alert" style="border-color: rgba(251, 113, 133, 0.45); margin-bottom: 1rem;">
+      <div class="approval" role="alert" style="border-color: var(--brick); margin-bottom: 1rem;">
         <p style="margin: 0;">{{ error }}</p>
       </div>
       {% endif %}
@@ -24,11 +24,11 @@
         <div class="stack">
           <label class="muted" for="login-email">Email
             <input id="login-email" name="email" type="email" required autocomplete="email"
-                   style="display: block; width: 100%; margin-top: 0.35rem; background: rgba(2, 6, 23, 0.7); border: 1px solid var(--panel-border); border-radius: 0.8rem; padding: 0.8rem 1rem; color: var(--text); font: inherit;">
+                   style="display: block; width: 100%; margin-top: 0.35rem;">
           </label>
           <label class="muted" for="login-password">Password
             <input id="login-password" name="password" type="password" required autocomplete="current-password"
-                   style="display: block; width: 100%; margin-top: 0.35rem; background: rgba(2, 6, 23, 0.7); border: 1px solid var(--panel-border); border-radius: 0.8rem; padding: 0.8rem 1rem; color: var(--text); font: inherit;">
+                   style="display: block; width: 100%; margin-top: 0.35rem;">
           </label>
           <button class="button approve" type="submit">Login</button>
         </div>

@@ -477,3 +477,13 @@ Per the approved design (clarify on garbage):
 1. **Rebrand**: user-visible surfaces → AiGuard (UI titles, README, docs, metrics prefix, session cookie, FastAPI title); identifiers → `aiguard-*` (compose containers, PG user/db, package + console script, `tools/mock_web_search.py`, GitHub repo). Dated history and `app_*` tables deliberately untouched.
 2. **EC2 free-tier deploy** (App Runner unavailable: account lacks the service subscription + GitHub OAuth needs console): `t3.micro` AL2023 + `docker-compose.prod.yml` (Caddy TLS) + SSM-only access, EIP `35.154.128.112`, `https://aiguard.noblechicken.me` live with trusted cert. AWS identifiers renamed in place (tags, SG swap, IAM role/profile swap with one ghost-association hiccup, old resources deleted).
 3. Box incident handled: a half-applied rename window (stale checkout) left mixed creds; recovered via full teardown + `reset --hard` + fresh rebuild, root-caused in the summary.
+
+## Frontend Redesign — Ledger World (Sep 6, 2026)
+**Status:** ✅ Completed
+
+1. **Design read**: operate-mode safety instrument for a technical reviewer; heritage-editorial language (bone paper, ink serif display, moss accent, mono data), hand-built CSS, self-hosted type, restrained anime.js. Skills: impeccable (operate mode, craft-floor bans) + animejs + design-taste-frontend; shadcn/watermelon explicitly rejected (React ecosystems, incompatible with the Jinja stack — stated, not silently ignored).
+2. **Type, self-hosted** (140KB woff2, latin): Cormorant Garamond 500/600 + italics (display only), Archivo 400–700 (UI/body), IBM Plex Mono 400–600 (data). Variable files deduped by inspecting `fvar` tables. Contrast ratios computed for all 7 text/background pairs — all AA.
+3. **Craft-floor compliance**: no feTurbulence grain (banned — flat paper + ledger ruling instead, justified as the subject's world), kickers nearly eliminated, uniform stat cards replaced with a ruled ledger, one accent locked (brick reserved for deny semantics), mono only for data, ornaments are pure geometry (rules, stamps, folio numerals, one circuit divider).
+4. **Motion thesis**: focal = approval stamp slam; feedback = bubble slide + button press + first-paint counters; reveals via IntersectionObserver with `.js`-gated hidden states (no-JS/CDN-fail shows everything); reduced-motion path. anime.js v4 UMD pinned, every call try/caught.
+5. **Preserved contracts**: all JS hooks, form actions, CSRF fields, aria attributes, and every test-pinned string verified by a render-smoke script (7 pages + font serving + no dark-theme leaks).
+6. Verification: 323/11 suite green, ruff clean, all 7 inline script blocks `node --check` clean, render smoke ALL-GREEN.
