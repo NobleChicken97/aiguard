@@ -287,3 +287,15 @@ a new finding class: unverified claims + memory hygiene. Shipped:
    sycophancy (untestable — scripted clients can't grade LLM compliance),
    and further live memory-plant probes (trace already proves planting;
    marginal value per LLM call).
+
+## Frontend redesign — ledger world (2026-09-06)
+
+Full visual replacement (reference: editorial portfolio, bone/sage/serif).
+Cormorant Garamond + Archivo + IBM Plex Mono, self-hosted woff2 (140KB,
+variable files deduped via `fvar`); all text/background pairs AA-verified
+by computation. Rubber-stamp verdicts, ruled-ledger dashboard (no stat
+cards), correspondence-slip chat, single-hop-only motion (stamp slam focal,
+anime.js v4 UMD guarded + reduced-motion path, content visible with no JS).
+React component libraries explicitly rejected (Jinja stack). Contracts
+pinned: every JS hook, form action, CSRF field, aria attribute, and
+test-pinned string preserved — verified by render smoke + full suite.
