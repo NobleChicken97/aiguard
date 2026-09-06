@@ -28,8 +28,7 @@ it production software, and several of its headline numbers measure the
 wrong thing or measure it circularly. The single most important sentence in
 this report: **every effectiveness number in this repo was graded by the
 same hand that wrote the code.** Until the external adversarial-5 and an
-independent router-eval rerun exist, treat 100% and 97.5% as *internal*
-scores, not security properties.
+independent router-eval rerun exist, treat any pre-external-5 number as self-graded history. (External-5 closed 2026-09-05: independent author, 5/5 no destructive execution.)
 
 **Grade: A- as an engineering portfolio piece. C+ as a deployable system.
 The minus and the plus are both load-bearing — read on.**
@@ -40,7 +39,7 @@ The minus and the plus are both load-bearing — read on.**
 
 | # | Claim | Evidence | Skeptic's note |
 |---|---|---|---|
-| 1 | 100% adversarial block rate | `test_prompt_adversarial.py` + `test_redteam_phase2.py` (20 bypass shapes), all green | **Self-graded.** Author wrote attacks against a guardrail whose rules they wrote. The battery is structurally good (case/quote/alias/subselect/UNION/write-paths) and it *did* catch a real bypass pre-merge (INSERT column lists) — so it's a real harness, but its ceiling is the author's imagination. External-5 still open. |
+| 1 | 100% adversarial block rate | `test_prompt_adversarial.py` + `test_redteam_phase2.py` (20 bypass shapes), all green | **Self-graded.** Author wrote attacks against a guardrail whose rules they wrote. The battery is structurally good (case/quote/alias/subselect/UNION/write-paths) and it *did* catch a real bypass pre-merge (INSERT column lists) — so it's a real harness, but its ceiling is the author's imagination. External-5 closed 2026-09-05: independent author, 5/5 no destructive execution. |
 | 2 | Router 97.5% live | `scripts/router_eval.py`, 40 cases, groq/gpt-oss-120b, 39/40 | **Self-graded set, uncalibrated confidences.** The one miss ("Who lives in Chicago?" → RESEARCH at high confidence) proves the confidence numbers are model-claimed, not calibrated — 0.99 confidence on a wrong answer means the 0.6 threshold is a vibes-based gate, not a measured operating point. No reliability diagram, no threshold sweep. Kept honest (miss documented, not tuned away) — credit for that. |
 | 3 | Auth + multi-tenancy | 20-test `test_authz.py`, login-gated everything, 404-not-403 | **Session tenancy, not data tenancy.** Any authenticated user can `SELECT *` across all demo tables — tenants are isolated by *conversation*, not by *data*. Fine for a shared demo dataset, but don't call it multi-tenancy in front of anyone who runs SaaS. |
 | 4 | Pause/resume: 202 in ~80ms, 30/30 in 1.9s | `test_pause_resume.py` (8), `scripts/load_approvals.py` | Numbers are real but the load rig is TestClient + SQLite: it proves *no thread is held*, not production throughput. Residual 1.2s/turn is SQLite write serialization, correctly attributed. No test against a real server, no slow-client behavior, no stampede past 30. |
@@ -183,7 +182,7 @@ restart: messages JSON survives, budget restarts — untested combination).
 
 **Must fix:** login/register rate limiting · data-tenancy decision (scope or contract) · retention/archival policy · `Secure` cookie + session runbook · provider timeout assertions.
 **Should fix:** threshold sweep for 0.6 · scheduled router-eval CI job · request-ID correlation · secret-value log redaction · test-DB isolation · `user_id` field removal.
-**Needs a human:** external adversarial-5 · demo video · first real deployment (App Runner + RDS) with a runbook written *during* it, not before.
+**Needs a human:** demo video recording (external-5 closed 2026-09-05; deployment is live).
 
 ---
 

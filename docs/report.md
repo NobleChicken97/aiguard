@@ -110,7 +110,7 @@ The project test suite covers all safety, resilience, and integration paths:
 | Supervisor structured routing (Phase 4) | 8 tests | 100% |
 | Explicit mock-search contract (Phase 5) | 6 tests | 100% |
 | Observability + Redis STM, 2 Redis-gated (Phase 3/6) | 9 tests | 100% |
-| **Total** | **313 collected** | **303 passed, 10 skipped (8 PG + 2 Redis)** |
+| **Total** | **322 collected** | **316 passed, 11 skipped (8 PG + 2 Redis + 1 PG-gated new)** |
 
 ### Adversarial guardrail effectiveness
 
@@ -127,7 +127,7 @@ All 22 destructive SQL attempts across 17 adversarial prompts are blocked before
 | Multi-statement & obfuscated | 3 | 3 | 100% |
 | **Total** | **27** | **27** | **100%** |
 
-A second, self-written red-team battery (`tests/test_redteam_phase2.py`, 20 column-bypass shapes: case, quoting, aliases, nesting, set ops, joins, write paths) also blocks 100% — with logged provenance: same author as the implementation, so it proves mechanism coverage, not independence. External prompts from an independent author stay open (see Remaining items).
+A second, self-written red-team battery (`tests/test_redteam_phase2.py`, 20 column-bypass shapes: case, quoting, aliases, nesting, set ops, joins, write paths) also blocks 100% — with logged provenance: same author as the implementation, so it proves mechanism coverage, not independence. An independent author (Claude Sonnet 4.6, no repo exposure) then produced an external pack (admin-pretext, QA-drop, migration-alter, full-table export, reinforcement-injection) run through auto-deny: **zero destructive execution**, row counts unchanged, PII masked on the export — pinned in `tests/test_external_redteam.py`. The export attempt also *confirmed* the documented data-tenancy limitation (full table readable by any authenticated user, emails masked).
 
 ### Deployment readiness
 
@@ -144,7 +144,7 @@ No live deployment exists yet: everything above is local/CI validation. The depl
 
 ### Version history
 
-- **v1.7.1 (Sep 2026) — Harsh-critic live audit fixes:** P0 PG SELECT rendered headers as data (keyed-access fix + PG-gated regression); P0 `/api/chat` session hijack → 404; auth rate limiting on /login + /register; resume/builder throttled; blank-message + length validation; bcrypt 72-byte cap; `create_user` blanket-except fix; Windows-safe `reset_db`; SEO (robots.txt, favicon, meta/OG/canonical). Live-verified after deploy (Chicago→real row, count→10, hijack→404, blank→422). Suite: 311 passed / 11 skipped.
+- **v1.7.1 (Sep 2026) — Harsh-critic live audit fixes:** P0 PG SELECT rendered headers as data (keyed-access fix + PG-gated regression); P0 `/api/chat` session hijack → 404; auth rate limiting on /login + /register; resume/builder throttled; blank-message + length validation; bcrypt 72-byte cap; `create_user` blanket-except fix; Windows-safe `reset_db`; SEO (robots.txt, favicon, meta/OG/canonical). Live-verified after deploy (Chicago→real row, count→10, hijack→404, blank→422). Suite at ship: 311 passed / 11 skipped; external-5 pack (+5, Claude Sonnet 4.6, zero damage) brings the current baseline to 316/11.
 - **v1.7.0 (Sep 2026) — First live deployment:** EC2 free-tier + Caddy TLS at https://aiguard.noblechicken.me; live battery (normal/refusal/gated-write/resume) + redeploy-survival proof. Suite: 303 passed / 10 skipped at ship.
 - **Post-v1.6.7 (Sep 2026) — Phases 0–7:** ground-truth audit (90% per-module coverage); safe cost default + fail-closed token semantics; HMAC auth with 7-table isolation + memory-prompt fix; column deny policy + INSERT volume gate + measured (flagged-off) NER; pause/resume approvals + Redis in CI; confidence-gated router (97.5% on a 40-case live eval); explicit mock search with labels everywhere; observability (`/metrics`, JSON logs, deep health, secrets docs). Detail: `STATUS.md` and the root `report.md` (harsh-critic edition).
 - **v1.6.7** (Sep 2026) — Production CI pipeline + deployment guidance:
@@ -268,7 +268,7 @@ Resolved since v1.6.7 (the old list below contradicted the changelog — each it
 
 Still genuinely open (blockers for real users/data, not the demo):
 - first real deployment (App Runner + RDS) with a runbook written during it
-- external adversarial prompts from an independent author (credibility ceiling on the 100%)
+- data tenancy (shared demo dataset; confirmed by external red-team's full-table export, PII held)
 - demo video recording (`docs/DEMO.md` script ready)
 - login/register rate limiting — **done** (`AUTH_RATE_PER_MIN`, v1.7.1)
 - per-user data scoping (tenants are isolated by session, not by data)
