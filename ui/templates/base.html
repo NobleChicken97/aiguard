@@ -623,11 +623,12 @@
     .ledger-row .v small { font-size: 0.75rem; color: var(--muted); font-weight: 500; }
 
     .colophon {
-      /* margin-top:auto pins the footer to the shell bottom on short pages;
-         the 4rem top padding preserves the air above the rule on long ones. */
+      /* margin-top:auto pins the footer to the shell bottom on short pages.
+         Rule/text gap stays tight (1rem); long pages keep their air from
+         the content's own bottom spacing. */
       margin-top: auto;
       border-top: 3px double var(--ink);
-      padding-top: 4rem;
+      padding-top: 1rem;
       display: flex;
       justify-content: space-between;
       gap: 1rem;

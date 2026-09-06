@@ -506,4 +506,4 @@ Per the approved design (clarify on garbage):
 4. **Sticky colophon**: `body` is a 100vh flex column with the shell growing, so the footer sits at the viewport bottom on short pages.
 5. Verification: targeted 54/1 template tests green, Jinja render smoke (active-tab ×3 states, tree head, drift CSS) clean.
 6. Level-3 connectors: events hang off their turn on a lighter sub-spine with smaller heads (scoped to `.turn`); event rows tint on hover; hidden on mobile.
-7. Footer double-pin: shell is now a nested flex column and `.colophon` uses `margin-top: auto` (air above the rule preserved via padding), so the footer holds the viewport bottom even where body-level flex alone didn't take.
+7. Footer double-pin: shell is now a nested flex column and `.colophon` uses `margin-top: auto` (rule/text gap kept tight at 1rem after a padding misstep spread them apart); devtools confirmed body+shell flex apply and footer sits at document bottom.
