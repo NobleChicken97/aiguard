@@ -96,6 +96,8 @@
       margin: 0 auto;
       padding: 1.5rem 0 3rem;
       flex: 1 0 auto;
+      display: flex;
+      flex-direction: column;
     }
     .prose-cap { max-width: 44rem; }
     .convo-cap { max-width: 56rem; }
@@ -621,9 +623,11 @@
     .ledger-row .v small { font-size: 0.75rem; color: var(--muted); font-weight: 500; }
 
     .colophon {
-      margin-top: 3rem;
+      /* margin-top:auto pins the footer to the shell bottom on short pages;
+         the 4rem top padding preserves the air above the rule on long ones. */
+      margin-top: auto;
       border-top: 3px double var(--ink);
-      padding-top: 1rem;
+      padding-top: 4rem;
       display: flex;
       justify-content: space-between;
       gap: 1rem;
